@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import math
 import io
+import json
 import requests
 
 DEFAULT_AHORRO_RATIO = 0.3
@@ -212,6 +213,61 @@ if 'tc_actualizado' not in st.session_state:
     st.session_state.tc_actualizado = None
 if 'fx_msg' not in st.session_state:
     st.session_state.fx_msg = None
+if 'config_msg' not in st.session_state:
+    st.session_state.config_msg = None
+
+
+def serializar_config():
+    """Devuelve bytes JSON con el estado persistible del usuario."""
+    payload = {
+        "version": 1,
+        "objetivos": st.session_state.objetivos,
+        "supuestos": st.session_state.supuestos,
+        "tc_USD": float(st.session_state.tc_USD),
+        "tc_EUR": float(st.session_state.tc_EUR),
+    }
+    return json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
+
+
+def cargar_config_callback():
+    """on_change del file_uploader: parsea JSON y actualiza session_state + widget keys."""
+    uploaded = st.session_state.get("config_upload")
+    if uploaded is None:
+        return
+    try:
+        config = json.loads(uploaded.getvalue())
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        st.session_state.config_msg = ("error", f"Archivo inválido: {e}")
+        return
+    if not isinstance(config, dict):
+        st.session_state.config_msg = ("error", "Formato JSON inválido (se esperaba un objeto).")
+        return
+
+    if isinstance(config.get("objetivos"), list):
+        st.session_state.objetivos = config["objetivos"]
+
+    if isinstance(config.get("supuestos"), dict):
+        for m, vals in config["supuestos"].items():
+            if m in MONEDAS and isinstance(vals, dict):
+                if "inflacion" in vals:
+                    val = float(vals["inflacion"])
+                    st.session_state.supuestos[m]["inflacion"] = val
+                    st.session_state[f"infl_{m}"] = val
+                if "rendimiento" in vals:
+                    val = float(vals["rendimiento"])
+                    st.session_state.supuestos[m]["rendimiento"] = val
+                    st.session_state[f"rend_{m}"] = val
+
+    if "tc_USD" in config:
+        st.session_state.tc_USD = float(config["tc_USD"])
+    if "tc_EUR" in config:
+        st.session_state.tc_EUR = float(config["tc_EUR"])
+
+    cnt = len(st.session_state.objetivos)
+    st.session_state.config_msg = (
+        "success",
+        f"Configuración cargada: {cnt} objetivo{'s' if cnt != 1 else ''}.",
+    )
 
 
 def actualizar_cotizaciones_callback():
@@ -284,6 +340,27 @@ with st.expander("⚙️ Supuestos macro y tipos de cambio", expanded=False):
         st.caption(f"Última actualización: {st.session_state.tc_actualizado}")
     else:
         st.caption("Cotizaciones manuales (sin actualización remota).")
+
+with st.expander("💾 Guardar / Cargar configuración", expanded=False):
+    st.caption("Descargá tus objetivos y supuestos como JSON. Cargá un archivo previo para restaurarlos.")
+    cfg_cols = st.columns([1, 1])
+    cfg_cols[0].download_button(
+        label="📥 Descargar configuración",
+        data=serializar_config(),
+        file_name="configuracion_finanzas.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+    cfg_cols[1].file_uploader(
+        "📂 Cargar configuración",
+        type=["json"],
+        key="config_upload",
+        on_change=cargar_config_callback,
+        label_visibility="collapsed",
+    )
+    if st.session_state.config_msg:
+        tipo, msg = st.session_state.config_msg
+        getattr(st, tipo)(msg)
 
 st.divider()
 
