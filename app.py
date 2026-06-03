@@ -715,7 +715,7 @@ st.set_page_config(layout="wide", page_title="Cuaderno de Finanzas", page_icon="
 
 # Identidad visual: Cuaderno de Finanzas. Editorial, refinado, cálido.
 # Streamlit no permite rediseño de layout — esto inyecta solo estilo.
-st.markdown("""
+st.html("""
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&display=swap" rel="stylesheet">
@@ -904,7 +904,7 @@ hr {
   font-weight: 500;
 }
 </style>
-""", unsafe_allow_html=True)
+""")
 
 
 _MESES_ES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -1062,7 +1062,7 @@ _n_metas_label = (
 )
 _perfil_chip = "Perfil definido" if st.session_state.get("perfil_completo", False) else "Perfil pendiente"
 
-st.markdown(f"""
+st.html(f"""
 <div style="
   font-family: 'Bricolage Grotesque', sans-serif;
   display: flex; justify-content: space-between; align-items: baseline;
@@ -1091,7 +1091,7 @@ st.markdown(f"""
     <div style="font-family: 'Fraunces', serif; font-size: 1.45rem; font-weight: 500; color: #1F1B16; line-height: 1.15; margin-top: 0.2rem;">{_n_metas_label}</div>
   </div>
 </div>
-""", unsafe_allow_html=True)
+""")
 st.divider()
 
 st.header("0. Perfil de Inversor Avanzado")
