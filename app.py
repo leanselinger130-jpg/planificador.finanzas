@@ -1107,8 +1107,8 @@ with tab_situacion:
             st.info("👈 Cargá tu sueldo para ver la distribución y el diagnóstico de salud financiera.")
 
     fondo_emerg_monto = 0.0
-    deuda_mensual_input = 0.0
-    
+    deuda_mensual_auto = float(st.session_state.get("gasto_deudas", 0.0))
+
     if sueldo > 0:
         st.subheader("🩺 Diagnóstico de Salud Financiera")
         diag_col1, diag_col2 = st.columns(2)
@@ -1119,17 +1119,17 @@ with tab_situacion:
                 help="Capital líquido disponible para emergencias. NO incluyas inversiones que tardan en rescatarse.",
             )
         with diag_col2:
-            deuda_mensual_input = st.number_input(
-                f"Cuotas de deuda mensuales ({moneda})",
-                min_value=0.0, step=500.0,
-                help="Suma de todas las cuotas que pagás por mes.",
+            st.metric(
+                label=f"Cuotas de deuda mensuales ({moneda})",
+                value=fmt(deuda_mensual_auto, moneda),
+                help="Se toma automáticamente de la categoría **Deudas** de tu tabla de gastos.",
             )
 
         gastos_para_fe = total_gastos if total_gastos > 0 else 1.0
         meses_fondo = fondo_emerg_monto / gastos_para_fe if gastos_para_fe > 0 else 0.0
 
         indicadores = calcular_indicadores_salud(
-            sueldo, total_gastos, ahorro_dispuesto, meses_fondo, deuda_mensual_input
+            sueldo, total_gastos, ahorro_dispuesto, meses_fondo, deuda_mensual_auto
         )
 
         if meses_fondo < 1 and ahorro_dispuesto > 0:
@@ -1183,7 +1183,7 @@ with tab_situacion:
     st.session_state.gastos_valor = total_gastos
     st.session_state.ahorro_dispuesto_valor = ahorro_dispuesto
     st.session_state.fondo_emerg_valor = fondo_emerg_monto if sueldo > 0 else 0.0
-    st.session_state.deuda_mensual_valor = deuda_mensual_input if sueldo > 0 else 0.0
+    st.session_state.deuda_mensual_valor = deuda_mensual_auto if sueldo > 0 else 0.0
 
 
 # ── TAB 2: PERFIL ───────────────────────────────────────────────────────
