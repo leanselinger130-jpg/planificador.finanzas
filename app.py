@@ -4,6 +4,7 @@ import pandas as pd
 import math
 import io
 import json
+import time
 import requests
 from datetime import datetime
 from streamlit_local_storage import LocalStorage
@@ -1608,6 +1609,116 @@ with tab_plan:
                     with st.expander("📈 Ver proyección temporal", expanded=False):
                         fig_proy = grafico_proyeccion(o, supuestos)
                         st.plotly_chart(fig_proy, use_container_width=True, key=f"proy_{idx}")
+
+    st.divider()
+
+    st.header("🤖 Reporte de tu Asesor de IA")
+    st.markdown(
+        "Generá un análisis personalizado de la coherencia de tu plan: un asesor "
+        "de IA revisa si tu fondo de emergencia es saludable, si tus metas son "
+        "matemáticamente viables y si los instrumentos sugeridos están alineados "
+        "con tu perfil de riesgo."
+    )
+
+    if st.button("✨ Analizar mi Plan Financiero", type="primary", key="btn_ai_report"):
+        sueldo_ctx = float(st.session_state.get("sueldo_valor", 0.0))
+        gastos_ctx = float(st.session_state.get("gastos_valor", 0.0))
+        ahorro_ctx = float(st.session_state.get("ahorro_dispuesto_valor", 0.0))
+        fondo_ctx = float(st.session_state.get("fondo_emerg_valor", 0.0))
+        deuda_ctx = float(st.session_state.get("deuda_mensual_valor", 0.0))
+
+        contexto_usuario = (
+            "## Situación financiera\n"
+            f"- Ingreso mensual: {fmt(sueldo_ctx, moneda)}\n"
+            f"- Gastos totales mensuales: {fmt(gastos_ctx, moneda)}\n"
+            f"- Ahorro dispuesto al mes: {fmt(ahorro_ctx, moneda)}\n"
+            f"- Fondo de emergencia actual: {fmt(fondo_ctx, moneda)}\n"
+            f"- Cuotas de deuda mensuales: {fmt(deuda_ctx, moneda)}\n\n"
+            "## Perfil de inversor\n"
+            f"- Risk Score: {risk_score} ({perfil_label_show})\n"
+            f"- Objetivo financiero: {objetivo_financiero}\n"
+            f"- Horizonte temporal: {horizonte_perfil}\n"
+            f"- Nivel de conocimiento (score): {int(conocimiento_score)}\n\n"
+            "## Metas financieras\n"
+        )
+        for o in objetivos_enriquecidos:
+            contexto_usuario += (
+                f"- **{o['Meta']}** ({o.get('Categoría', 'Otro')}, prioridad {o['Prioridad']}): "
+                f"necesita {fmt(o['costo_futuro'], o['moneda_meta'])} en {int(o['Plazo (Meses)'])} meses · "
+                f"estado: {o['estado']} · instrumento sugerido: {o['instrumento']['tipo']}\n"
+            )
+
+        system_prompt = (
+            "Sos un asesor financiero experto, claro y empático, especializado en "
+            "planificación personal. Analizá el plan financiero del usuario y "
+            "entregá un reporte ejecutivo breve. Evaluá específicamente: "
+            "(1) si el fondo de emergencia es saludable según sus gastos mensuales "
+            "(benchmark: 3 a 6 meses de gastos), "
+            "(2) si cada meta es matemáticamente viable con el ahorro dispuesto, "
+            "los plazos planteados y la inflación esperada, y "
+            "(3) si los instrumentos sugeridos para cada meta están alineados con "
+            "el perfil de riesgo y horizonte del usuario. "
+            "Cerrá con exactamente 2 recomendaciones accionables, priorizadas y "
+            "específicas a la situación analizada. Tono profesional pero accesible, "
+            "sin jerga innecesaria."
+        )
+
+        with st.spinner("🧠 Tu asesor de IA está analizando tu plan…"):
+            time.sleep(2)
+
+        meses_fe = fondo_ctx / gastos_ctx if gastos_ctx > 0 else 0.0
+        ratio_ahorro = ahorro_ctx / sueldo_ctx if sueldo_ctx > 0 else 0.0
+        n_metas = len(objetivos_enriquecidos)
+        metas_tension = sum(1 for o in objetivos_enriquecidos if o.get("estado") != "ok")
+
+        if 3 <= meses_fe <= 6:
+            txt_fondo = "se ubica dentro del rango saludable (3 a 6 meses). Mantenelo en instrumentos líquidos."
+        elif meses_fe < 3:
+            txt_fondo = "queda por debajo del benchmark recomendado (3 meses mínimo). Esta debería ser la prioridad cero antes de cualquier inversión de plazo más largo."
+        else:
+            txt_fondo = "supera los 6 meses de cobertura: hay excedente que podría capitalizarse en instrumentos de bajo riesgo sin comprometer tu colchón."
+
+        if meses_fe >= 3:
+            rec1 = "Mantené el fondo de emergencia y dirigí cualquier excedente a la meta de mayor prioridad para acortar su horizonte."
+        else:
+            rec1 = "Pausá temporalmente los aportes a metas no críticas y redirigí ese flujo al fondo de emergencia hasta cubrir al menos 3 meses de gastos."
+
+        if metas_tension > 0:
+            rec2 = "Revisá las metas en tensión: o ampliás el plazo, o reducís el costo objetivo, o reasignás prioridades. Hoy el ahorro dispuesto no alcanza para cubrir la cuota ideal de todas."
+        else:
+            rec2 = "Automatizá tus aportes mensuales para sostener el plan sin fricción y revisá el perfil cada 6 a 12 meses, o ante cambios materiales en tu situación."
+
+        reporte_simulado = (
+            "### 📋 Reporte ejecutivo personalizado\n\n"
+            f"**Diagnóstico general.** Tu perfil **{perfil_label_show}** (Risk Score {risk_score}) "
+            f"marca el norte de la estrategia. Con un ingreso de {fmt(sueldo_ctx, moneda)} "
+            f"y un ahorro dispuesto de {fmt(ahorro_ctx, moneda)} "
+            f"({ratio_ahorro:.0%} de tu ingreso), tu base operativa es "
+            f"{'sólida' if ratio_ahorro >= 0.2 else 'ajustada'}.\n\n"
+            f"**🛡️ Fondo de emergencia.** Hoy cubrís aproximadamente **{meses_fe:.1f} meses** "
+            f"de gastos con tu fondo líquido. Ese nivel {txt_fondo}\n\n"
+            f"**🎯 Viabilidad de metas.** Cargaste **{n_metas} meta(s)**, de las cuales "
+            f"**{metas_tension}** muestran señales de tensión (la asignación real es menor "
+            "a la cuota ideal). Las cuotas ideales ya incorporan el costo futuro ajustado "
+            "por inflación; cuando se desvía, conviene revisar plazo o monto antes que "
+            "estirar el ahorro mensual.\n\n"
+            f"**🧭 Alineación instrumento ↔ perfil.** Los instrumentos sugeridos respetan "
+            f"tu Risk Score y tu nivel de conocimiento ({int(conocimiento_score)}). Para "
+            "horizontes cortos se priorizan vehículos de baja volatilidad; para plazos "
+            "largos se introduce gradualmente exposición a renta variable acorde a tu "
+            "tolerancia declarada.\n\n"
+            "---\n\n"
+            "**✅ 2 recomendaciones accionables**\n\n"
+            f"1. {rec1}\n"
+            f"2. {rec2}"
+        )
+
+        with st.container(border=True):
+            st.caption(
+                "⚠️ *Simulación visual a la espera de conectar la API de OpenAI / Anthropic. "
+                "El contenido es ilustrativo y se generará dinámicamente cuando la integración esté lista.*"
+            )
+            st.markdown(reporte_simulado)
 
     st.divider()
 
