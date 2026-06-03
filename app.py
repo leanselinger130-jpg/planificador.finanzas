@@ -5,6 +5,9 @@ import math
 import io
 import json
 import requests
+from streamlit_local_storage import LocalStorage
+
+LS_KEY = "planificador_finanzas_config"
 
 DEFAULT_AHORRO_RATIO = 0.3
 RATIO_GASTOS_ALTO = 0.7
@@ -738,23 +741,11 @@ def serializar_config():
     return json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
 
 
-def cargar_config_callback():
-    """on_change del file_uploader: parsea JSON y actualiza session_state + widget keys."""
-    uploaded = st.session_state.get("config_upload")
-    if uploaded is None:
-        return
-    try:
-        config = json.loads(uploaded.getvalue())
-    except (json.JSONDecodeError, UnicodeDecodeError) as e:
-        st.session_state.config_msg = ("error", f"Archivo inválido: {e}")
-        return
-    if not isinstance(config, dict):
-        st.session_state.config_msg = ("error", "Formato JSON inválido (se esperaba un objeto).")
-        return
-
+def _aplicar_config(config: dict) -> int:
+    """Aplica un dict de configuración a session_state + widget keys.
+    Devuelve la cantidad de objetivos aplicados."""
     if isinstance(config.get("objetivos"), list):
         st.session_state.objetivos = config["objetivos"]
-
     if isinstance(config.get("supuestos"), dict):
         for m, vals in config["supuestos"].items():
             if m in MONEDAS and isinstance(vals, dict):
@@ -766,13 +757,27 @@ def cargar_config_callback():
                     val = float(vals["rendimiento"])
                     st.session_state.supuestos[m]["rendimiento"] = val
                     st.session_state[f"rend_{m}"] = val
-
     if "tc_USD" in config:
         st.session_state.tc_USD = float(config["tc_USD"])
     if "tc_EUR" in config:
         st.session_state.tc_EUR = float(config["tc_EUR"])
+    return len(st.session_state.objetivos)
 
-    cnt = len(st.session_state.objetivos)
+
+def cargar_config_callback():
+    """on_change del file_uploader: parsea JSON y delega en _aplicar_config."""
+    uploaded = st.session_state.get("config_upload")
+    if uploaded is None:
+        return
+    try:
+        config = json.loads(uploaded.getvalue())
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        st.session_state.config_msg = ("error", f"Archivo inválido: {e}")
+        return
+    if not isinstance(config, dict):
+        st.session_state.config_msg = ("error", "Formato JSON inválido (se esperaba un objeto).")
+        return
+    cnt = _aplicar_config(config)
     st.session_state.config_msg = (
         "success",
         f"Configuración cargada: {cnt} objetivo{'s' if cnt != 1 else ''}.",
@@ -800,6 +805,30 @@ def actualizar_cotizaciones_callback():
     st.session_state.tc_actualizado = data.get("actualizado")
     st.session_state.fx_msg = ("success",
         f"Cotizaciones actualizadas desde dolarapi.com ({casa}).")
+
+
+def borrar_localstorage_callback():
+    """on_click: borra los datos del navegador y suspende el autosave en esta sesión."""
+    _ls.deleteItem(LS_KEY)
+    st.session_state._ls_disabled = True
+    st.session_state.pop("_ls_last_saved", None)
+    st.session_state.pop("_ls_last_loaded", None)
+    st.session_state.config_msg = (
+        "info",
+        "Datos del navegador borrados. El autosave queda pausado en esta sesión "
+        "(refrescá la página para reactivarlo).",
+    )
+
+
+_ls = LocalStorage()
+_ls_saved = _ls.getItem(LS_KEY)
+if _ls_saved and _ls_saved != st.session_state.get("_ls_last_loaded"):
+    try:
+        _aplicar_config(json.loads(_ls_saved))
+        st.session_state._ls_last_loaded = _ls_saved
+        st.session_state._ls_last_saved = _ls_saved
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
 
 st.title("💰 Planificador de Ruta Crítica Financiera")
 st.markdown("Gestión de ahorro por **cascada de prioridades estratégica** con recomendación de inversión.")
@@ -1080,7 +1109,10 @@ with st.expander("⚙️ Supuestos macro y tipos de cambio", expanded=False):
         st.caption("Cotizaciones manuales (sin actualización remota).")
 
 with st.expander("💾 Guardar / Cargar configuración", expanded=False):
-    st.caption("Descargá tus objetivos y supuestos como JSON. Cargá un archivo previo para restaurarlos.")
+    st.caption(
+        "Tu configuración se guarda automáticamente en este navegador. "
+        "También podés descargar/cargar un archivo JSON para mover los datos a otro dispositivo."
+    )
     cfg_cols = st.columns([1, 1])
     cfg_cols[0].download_button(
         label="📥 Descargar configuración",
@@ -1095,6 +1127,11 @@ with st.expander("💾 Guardar / Cargar configuración", expanded=False):
         key="config_upload",
         on_change=cargar_config_callback,
         label_visibility="collapsed",
+    )
+    st.button(
+        "🗑️ Borrar datos guardados en este navegador",
+        on_click=borrar_localstorage_callback,
+        help="Solo afecta a este navegador. Tu archivo JSON descargado no se borra.",
     )
     if st.session_state.config_msg:
         tipo, msg = st.session_state.config_msg
@@ -1538,3 +1575,11 @@ if objetivos_enriquecidos:
         file_name="ruta_critica_financiera.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
+
+# Auto-save al localStorage del navegador. Solo escribe si cambió y no está suspendido.
+if not st.session_state.get("_ls_disabled"):
+    _current_json = serializar_config().decode("utf-8")
+    if _current_json != st.session_state.get("_ls_last_saved"):
+        _ls.setItem(LS_KEY, _current_json, key="ls_autosave")
+        st.session_state._ls_last_saved = _current_json
