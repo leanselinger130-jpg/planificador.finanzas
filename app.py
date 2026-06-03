@@ -4,8 +4,8 @@ import pandas as pd
 import math
 import io
 import json
-import time
 import requests
+import google.generativeai as genai
 from datetime import datetime
 from streamlit_local_storage import LocalStorage
 
@@ -1663,62 +1663,35 @@ with tab_plan:
             "sin jerga innecesaria."
         )
 
-        with st.spinner("🧠 Tu asesor de IA está analizando tu plan…"):
-            time.sleep(2)
-
-        meses_fe = fondo_ctx / gastos_ctx if gastos_ctx > 0 else 0.0
-        ratio_ahorro = ahorro_ctx / sueldo_ctx if sueldo_ctx > 0 else 0.0
-        n_metas = len(objetivos_enriquecidos)
-        metas_tension = sum(1 for o in objetivos_enriquecidos if o.get("estado") != "ok")
-
-        if 3 <= meses_fe <= 6:
-            txt_fondo = "se ubica dentro del rango saludable (3 a 6 meses). Mantenelo en instrumentos líquidos."
-        elif meses_fe < 3:
-            txt_fondo = "queda por debajo del benchmark recomendado (3 meses mínimo). Esta debería ser la prioridad cero antes de cualquier inversión de plazo más largo."
-        else:
-            txt_fondo = "supera los 6 meses de cobertura: hay excedente que podría capitalizarse en instrumentos de bajo riesgo sin comprometer tu colchón."
-
-        if meses_fe >= 3:
-            rec1 = "Mantené el fondo de emergencia y dirigí cualquier excedente a la meta de mayor prioridad para acortar su horizonte."
-        else:
-            rec1 = "Pausá temporalmente los aportes a metas no críticas y redirigí ese flujo al fondo de emergencia hasta cubrir al menos 3 meses de gastos."
-
-        if metas_tension > 0:
-            rec2 = "Revisá las metas en tensión: o ampliás el plazo, o reducís el costo objetivo, o reasignás prioridades. Hoy el ahorro dispuesto no alcanza para cubrir la cuota ideal de todas."
-        else:
-            rec2 = "Automatizá tus aportes mensuales para sostener el plan sin fricción y revisá el perfil cada 6 a 12 meses, o ante cambios materiales en tu situación."
-
-        reporte_simulado = (
-            "### 📋 Reporte ejecutivo personalizado\n\n"
-            f"**Diagnóstico general.** Tu perfil **{perfil_label_show}** (Risk Score {risk_score}) "
-            f"marca el norte de la estrategia. Con un ingreso de {fmt(sueldo_ctx, moneda)} "
-            f"y un ahorro dispuesto de {fmt(ahorro_ctx, moneda)} "
-            f"({ratio_ahorro:.0%} de tu ingreso), tu base operativa es "
-            f"{'sólida' if ratio_ahorro >= 0.2 else 'ajustada'}.\n\n"
-            f"**🛡️ Fondo de emergencia.** Hoy cubrís aproximadamente **{meses_fe:.1f} meses** "
-            f"de gastos con tu fondo líquido. Ese nivel {txt_fondo}\n\n"
-            f"**🎯 Viabilidad de metas.** Cargaste **{n_metas} meta(s)**, de las cuales "
-            f"**{metas_tension}** muestran señales de tensión (la asignación real es menor "
-            "a la cuota ideal). Las cuotas ideales ya incorporan el costo futuro ajustado "
-            "por inflación; cuando se desvía, conviene revisar plazo o monto antes que "
-            "estirar el ahorro mensual.\n\n"
-            f"**🧭 Alineación instrumento ↔ perfil.** Los instrumentos sugeridos respetan "
-            f"tu Risk Score y tu nivel de conocimiento ({int(conocimiento_score)}). Para "
-            "horizontes cortos se priorizan vehículos de baja volatilidad; para plazos "
-            "largos se introduce gradualmente exposición a renta variable acorde a tu "
-            "tolerancia declarada.\n\n"
-            "---\n\n"
-            "**✅ 2 recomendaciones accionables**\n\n"
-            f"1. {rec1}\n"
-            f"2. {rec2}"
-        )
-
-        with st.container(border=True):
-            st.caption(
-                "⚠️ *Simulación visual a la espera de conectar la API de OpenAI / Anthropic. "
-                "El contenido es ilustrativo y se generará dinámicamente cuando la integración esté lista.*"
+        api_key = st.secrets.get("GOOGLE_API_KEY", "").strip()
+        if not api_key:
+            st.error(
+                "⚠️ Falta configurar `GOOGLE_API_KEY` en `.streamlit/secrets.toml`. "
+                "Sin esa key no puedo consultar a Gemini."
             )
-            st.markdown(reporte_simulado)
+        else:
+            try:
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel(
+                    "gemini-2.0-flash",
+                    system_instruction=system_prompt,
+                )
+                with st.spinner("🧠 Tu asesor de IA está analizando tu plan…"):
+                    response = model.generate_content(
+                        contexto_usuario,
+                        generation_config={
+                            "temperature": 0.6,
+                            "max_output_tokens": 1500,
+                        },
+                    )
+
+                with st.container(border=True):
+                    st.caption(
+                        "✨ *Análisis generado por Gemini 2.0 Flash en base a los datos cargados en tu sesión.*"
+                    )
+                    st.markdown(response.text)
+            except Exception as e:
+                st.error(f"No pude generar el reporte: {e}")
 
     st.divider()
 
