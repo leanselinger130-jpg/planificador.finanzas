@@ -162,7 +162,7 @@ def obtener_inflacion_actual():
 
     except Exception:
         return 80.0
-      SUPUESTOS_DEFAULT["ARS"]["inflacion"] = obtener_inflacion_actual()
+      
 # ARS por 1 unidad de la moneda. ARS siempre 1.0 (pivote).
 TIPOS_CAMBIO_DEFAULT = {"ARS": 1.0, "USD": 1200.0, "EUR": 1300.0}
 CASAS_DOLAR = ["oficial", "blue", "bolsa", "contadoconliqui", "cripto", "tarjeta"]
