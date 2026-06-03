@@ -1027,7 +1027,7 @@ with tab_situacion:
         with col_sueldo:
             sueldo = st.number_input(f"Sueldo Neto Mensual ({moneda})", min_value=0.0, step=1000.0)
 
-        with st.expander("📋 Detalle de gastos mensuales por categoría", expanded=True):
+        with st.expander("📋 Gastos y reservas mensuales", expanded=True):
             st.caption(f"Cargá tus gastos en {moneda}. La regla 50/30/20 sugiere ≤ 50% en Necesidades, ≤ 30% en Deseos y ≥ 20% al Ahorro.")
             _necesidades = [c for c in CATEGORIAS_GASTOS if c["tipo"] == "Necesidad"]
             _deseos = [c for c in CATEGORIAS_GASTOS if c["tipo"] == "Deseo"]
@@ -1040,6 +1040,14 @@ with tab_situacion:
                 st.markdown("**🎯 Deseos** _(meta ≤ 30%)_")
                 for c in _deseos:
                     st.number_input(c["nombre"], min_value=0.0, step=500.0, key=f"gasto_{c['id']}")
+
+            st.divider()
+            st.markdown("**💰 Reserva líquida**")
+            fondo_emerg_monto = st.number_input(
+                f"Fondo de emergencia actual ({moneda})",
+                min_value=0.0, step=1000.0,
+                help="Capital líquido disponible para emergencias. NO incluyas inversiones que tardan en rescatarse.",
+            )
 
         total_necesidades = sum(float(st.session_state.get(f"gasto_{c['id']}", 0.0)) for c in CATEGORIAS_GASTOS if c["tipo"] == "Necesidad")
         total_deseos = sum(float(st.session_state.get(f"gasto_{c['id']}", 0.0)) for c in CATEGORIAS_GASTOS if c["tipo"] == "Deseo")
@@ -1106,24 +1114,15 @@ with tab_situacion:
         else:
             st.info("👈 Cargá tu sueldo para ver la distribución y el diagnóstico de salud financiera.")
 
-    fondo_emerg_monto = 0.0
     deuda_mensual_auto = float(st.session_state.get("gasto_deudas", 0.0))
 
     if sueldo > 0:
         st.subheader("🩺 Diagnóstico de Salud Financiera")
-        diag_col1, diag_col2 = st.columns(2)
-        with diag_col1:
-            fondo_emerg_monto = st.number_input(
-                f"Fondo de emergencia actual ({moneda})",
-                min_value=0.0, step=1000.0,
-                help="Capital líquido disponible para emergencias. NO incluyas inversiones que tardan en rescatarse.",
-            )
-        with diag_col2:
-            st.metric(
-                label=f"Cuotas de deuda mensuales ({moneda})",
-                value=fmt(deuda_mensual_auto, moneda),
-                help="Se toma automáticamente de la categoría **Deudas** de tu tabla de gastos.",
-            )
+        st.caption(
+            f"💰 Fondo de emergencia: **{fmt(fondo_emerg_monto, moneda)}** · "
+            f"💳 Cuotas de deuda detectadas: **{fmt(deuda_mensual_auto, moneda)}** "
+            f"_(de tu tabla de gastos)_"
+        )
 
         gastos_para_fe = total_gastos if total_gastos > 0 else 1.0
         meses_fondo = fondo_emerg_monto / gastos_para_fe if gastos_para_fe > 0 else 0.0
