@@ -367,11 +367,10 @@ def recomendar_instrumento(plazo_meses, perfil, risk_score=50, objetivo="Crecimi
 def convertir(monto, de_moneda, a_moneda, tipos_cambio):
     if de_moneda == a_moneda or monto == 0:
         return monto
-    return monto * tipos_cambio[de_moneda] / tipos_cambio[a_moneda]
-
-
-def _tasa_mensual(tasa_anual_pct):
-    return (1 + tasa_anual_pct / 100) ** (1 / 12) - 1
+    tc_destino = tipos_cambio.get(a_moneda, 0)
+    if tc_destino <= 0:
+        return monto
+    return monto * tipos_cambio[de_moneda] / tc_destino
 
 
 def calcular_cuota_meta(obj, supuestos):
@@ -433,8 +432,27 @@ def estado_meta(cuota_asignada, cuota_ideal):
 
 
 def fmt(monto, codigo):
-    return f"{codigo} {monto:,.2f}"
+    return f"{codigo} {monto:,.2f}"    
+DTYPES_OBJETIVOS = {
+    "Costo Total": "float64",
+    "Ya Ahorrado": "float64",
+    "Plazo (Meses)": "int64",
+}
 
+def _normalizar_df(df, moneda_fallback):
+    """Limpia y normaliza dtypes del DataFrame de objetivos para comparación segura."""
+    df = df.copy()
+    df["Moneda"] = df["Moneda"].fillna(moneda_fallback)
+    df = df.dropna(subset=["Meta", "Costo Total", "Plazo (Meses)"])
+    df = df[df["Meta"].astype(str).str.strip() != ""]
+    for col, dt in DTYPES_OBJETIVOS.items():
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=list(DTYPES_OBJETIVOS))
+    for col, dt in DTYPES_OBJETIVOS.items():
+        if col in df.columns:
+            df[col] = df[col].astype(dt)
+    return df.reset_index(drop=True)
 
 # ── MEJORA 1: Proyección temporal de capital acumulado ────────────────────────
 def proyectar_capital(
@@ -1094,8 +1112,8 @@ with st.expander("⚙️ Supuestos macro y tipos de cambio", expanded=False):
     st.divider()
     st.markdown("**Tipos de cambio** (ARS por 1 unidad)")
     fx_cols = st.columns([1, 1, 1.4])
-    fx_cols[0].number_input("USD → ARS", step=10.0, key="tc_USD")
-    fx_cols[1].number_input("EUR → ARS", step=10.0, key="tc_EUR")
+    fx_cols[0].number_input("USD → ARS", min_value=0.01, step=10.0, key="tc_USD")
+    fx_cols[1].number_input("EUR → ARS", min_value=0.01, step=10.0, key="tc_EUR")
     fx_cols[2].selectbox("Casa para actualizar USD", CASAS_DOLAR, index=2, key="casa_dolar")
 
     st.button("🔄 Actualizar cotizaciones desde dolarapi.com",
@@ -1321,7 +1339,7 @@ with col_lista:
 
         st.subheader("Listado Estratégico")
         edited_df = st.data_editor(
-            df_base, num_rows="dynamic", use_container_width=True,
+            df_base, num_rows="fixed", use_container_width=True,
             column_config={
                 "Categoría": st.column_config.SelectboxColumn("Categoría", options=CATEGORIAS),
                 "Prioridad": st.column_config.SelectboxColumn("Prioridad", options=PRIORIDADES),
@@ -1337,12 +1355,17 @@ with col_lista:
             key="editor_cascada_final",
         )
 
-        cleaned = edited_df.drop(columns=['Cuota Requerida']).copy()
-        cleaned["Moneda"] = cleaned["Moneda"].fillna(moneda)
-        cleaned = cleaned.dropna(subset=["Meta", "Costo Total", "Plazo (Meses)"])
-        cleaned = cleaned[cleaned["Meta"].astype(str).str.strip() != ""]
-        if not cleaned.reset_index(drop=True).equals(df_base.drop(columns=['Cuota Requerida']).reset_index(drop=True)):
-            st.session_state.objetivos = cleaned.to_dict('records')
+        cleaned = _normalizar_df(
+            edited_df.drop(columns=["Cuota Requerida"]),
+            moneda_fallback=moneda,
+        )
+        actual = _normalizar_df(
+            pd.DataFrame(st.session_state.objetivos),
+            moneda_fallback=moneda,
+        )
+        cols_comunes = [c for c in cleaned.columns if c in actual.columns]
+        if not cleaned[cols_comunes].equals(actual[cols_comunes]):
+            st.session_state.objetivos = cleaned.to_dict("records")
             st.rerun()
 
         objs_sorted = sorted(st.session_state.objetivos, key=lambda x: PRIO_ORDER.get(x.get("Prioridad"), 3))
