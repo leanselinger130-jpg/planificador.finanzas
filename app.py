@@ -941,6 +941,19 @@ for _k, _v in [('score_tolerancia', 50.0), ('score_capacidad', 50.0),
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
+# Estado compartido entre tabs
+for _k, _v in [
+    ("moneda_ingreso", "ARS"),
+    ("sueldo_valor", 0.0),
+    ("gastos_valor", 0.0),
+    ("ahorro_dispuesto_valor", 0.0),
+    ("fondo_emerg_valor", 0.0),
+    ("deuda_mensual_valor", 0.0),
+    ("objetivos_enriquecidos", []),
+]:
+    if _k not in st.session_state:
+        st.session_state[_k] = _v
+
 
 def serializar_config():
     """Devuelve bytes JSON con el estado persistible del usuario."""
@@ -1053,6 +1066,66 @@ if _ls_saved and _ls_saved != st.session_state.get("_ls_last_loaded"):
         st.session_state._ls_last_saved = _ls_saved
     except (json.JSONDecodeError, TypeError, ValueError):
         pass
+
+# ── Sidebar ──────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.header("⚙️ Configuración")
+    
+    with st.expander("Supuestos macro", expanded=False):
+        st.caption("Inflación y rendimiento nominales anuales.")
+        for m in MONEDAS:
+            st.markdown(f"**{m}**")
+            st.session_state.supuestos[m]["inflacion"] = st.number_input(
+                f"Inflación % ({m})",
+                value=float(st.session_state.supuestos[m]["inflacion"]),
+                step=0.5, key=f"infl_{m}",
+            )
+            st.session_state.supuestos[m]["rendimiento"] = st.number_input(
+                f"Rendimiento % ({m})",
+                value=float(st.session_state.supuestos[m]["rendimiento"]),
+                step=0.5, key=f"rend_{m}",
+            )
+
+    with st.expander("Tipos de cambio", expanded=False):
+        st.number_input("USD → ARS", min_value=0.01, step=10.0, key="tc_USD")
+        st.number_input("EUR → ARS", min_value=0.01, step=10.0, key="tc_EUR")
+        st.selectbox("Casa para actualizar USD", CASAS_DOLAR, index=2, key="casa_dolar")
+
+        st.button("🔄 Actualizar desde dolarapi.com",
+                  on_click=actualizar_cotizaciones_callback,
+                  use_container_width=True)
+
+        if st.session_state.fx_msg:
+            tipo, msg = st.session_state.fx_msg
+            getattr(st, tipo)(msg)
+
+        if st.session_state.tc_actualizado:
+            st.caption(f"Actualizado: {st.session_state.tc_actualizado}")
+
+    with st.expander("Guardar / Cargar", expanded=False):
+        st.download_button(
+            label="📥 Descargar configuración",
+            data=serializar_config(),
+            file_name="configuracion_finanzas.json",
+            mime="application/json",
+            use_container_width=True,
+        )
+        st.file_uploader(
+            "📂 Cargar configuración",
+            type=["json"],
+            key="config_upload",
+            on_change=cargar_config_callback,
+            label_visibility="collapsed",
+        )
+        st.button(
+            "🗑️ Borrar datos guardados en este navegador",
+            on_click=borrar_localstorage_callback,
+            help="Solo afecta a este navegador. Tu archivo JSON descargado no se borra.",
+        )
+        if st.session_state.config_msg:
+            tipo, msg = st.session_state.config_msg
+            getattr(st, tipo)(msg)
+
 
 _hoy = datetime.now()
 _n_metas = len(st.session_state.get("objetivos", []))
@@ -1332,71 +1405,6 @@ with st.container(border=True):
 # Expone variables para uso en el resto de la app
 perfil = perfil_label_show  # backward compat con secciones inferiores
 
-with st.expander("⚙️ Supuestos macro y tipos de cambio", expanded=False):
-    st.caption("Inflación y rendimiento nominales anuales. Editá según tu contexto.")
-    cols = st.columns(3)
-    for i, m in enumerate(MONEDAS):
-        with cols[i]:
-            st.markdown(f"**{m}**")
-            st.session_state.supuestos[m]["inflacion"] = st.number_input(
-                f"Inflación anual % ({m})",
-                value=float(st.session_state.supuestos[m]["inflacion"]),
-                step=0.5, key=f"infl_{m}",
-            )
-            st.session_state.supuestos[m]["rendimiento"] = st.number_input(
-                f"Rendimiento anual % ({m})",
-                value=float(st.session_state.supuestos[m]["rendimiento"]),
-                step=0.5, key=f"rend_{m}",
-            )
-
-    st.divider()
-    st.markdown("**Tipos de cambio** (ARS por 1 unidad)")
-    fx_cols = st.columns([1, 1, 1.4])
-    fx_cols[0].number_input("USD → ARS", min_value=0.01, step=10.0, key="tc_USD")
-    fx_cols[1].number_input("EUR → ARS", min_value=0.01, step=10.0, key="tc_EUR")
-    fx_cols[2].selectbox("Casa para actualizar USD", CASAS_DOLAR, index=2, key="casa_dolar")
-
-    st.button("🔄 Actualizar cotizaciones desde dolarapi.com",
-              on_click=actualizar_cotizaciones_callback)
-
-    if st.session_state.fx_msg:
-        tipo, msg = st.session_state.fx_msg
-        getattr(st, tipo)(msg)
-
-    if st.session_state.tc_actualizado:
-        st.caption(f"Última actualización: {st.session_state.tc_actualizado}")
-    else:
-        st.caption("Cotizaciones manuales (sin actualización remota).")
-
-with st.expander("💾 Guardar / Cargar configuración", expanded=False):
-    st.caption(
-        "Tu configuración se guarda automáticamente en este navegador. "
-        "También podés descargar/cargar un archivo JSON para mover los datos a otro dispositivo."
-    )
-    cfg_cols = st.columns([1, 1])
-    cfg_cols[0].download_button(
-        label="📥 Descargar configuración",
-        data=serializar_config(),
-        file_name="configuracion_finanzas.json",
-        mime="application/json",
-        use_container_width=True,
-    )
-    cfg_cols[1].file_uploader(
-        "📂 Cargar configuración",
-        type=["json"],
-        key="config_upload",
-        on_change=cargar_config_callback,
-        label_visibility="collapsed",
-    )
-    st.button(
-        "🗑️ Borrar datos guardados en este navegador",
-        on_click=borrar_localstorage_callback,
-        help="Solo afecta a este navegador. Tu archivo JSON descargado no se borra.",
-    )
-    if st.session_state.config_msg:
-        tipo, msg = st.session_state.config_msg
-        getattr(st, tipo)(msg)
-
 st.divider()
 
 supuestos = st.session_state.supuestos
@@ -1466,7 +1474,7 @@ with col_inputs:
         ind_cols[0].markdown(_render_indicador("Necesidades", pct_n, 0.50), unsafe_allow_html=True)
         ind_cols[1].markdown(_render_indicador("Deseos", pct_d, 0.30), unsafe_allow_html=True)
         ind_cols[2].markdown(_render_indicador("Ahorro potencial", pct_ahorro_potencial, 0.20, mayor_es_mejor=True), unsafe_allow_html=True)
-        st.caption(f"Total gastos: **{fmt(total_gastos, moneda)}**  ·  Disponible: **{fmt(max(0.0, disponible_bruto), moneda)}**")
+        st.caption(f"Total gastos: **{fmt(total_gastos, moneda)}** ·  Disponible: **{fmt(max(0.0, disponible_bruto), moneda)}**")
 
     st.divider()
     st.subheader("💡 Capacidad de Ahorro")
