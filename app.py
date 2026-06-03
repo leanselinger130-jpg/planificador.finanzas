@@ -10,7 +10,6 @@ from streamlit_local_storage import LocalStorage
 LS_KEY = "planificador_finanzas_config"
 
 DEFAULT_AHORRO_RATIO = 0.3
-RATIO_GASTOS_ALTO = 0.7
 RATIO_AHORRO_BAJO = 0.1
 RATIO_AHORRO_OBJETIVO = 0.2
 OBJ_POR_FILA = 3
@@ -21,6 +20,22 @@ PRIORIDADES = ["Baja", "Media", "Alta"]
 PRIO_ORDER = {"Alta": 0, "Media": 1, "Baja": 2}
 COLOR_PRIORIDAD = {"Alta": "#E74C3C", "Media": "#F1C40F", "Baja": "#3498DB"}
 MONEDAS = ["ARS", "USD", "EUR"]
+
+# Categorías para desglose de gastos. La tabla se renderiza dinámicamente de aquí
+# y los indicadores 50/30/20 derivan los totales por tipo.
+CATEGORIAS_GASTOS = [
+    {"id": "vivienda",      "nombre": "Vivienda (alquiler, expensas, ABL)",                         "tipo": "Necesidad"},
+    {"id": "servicios",     "nombre": "Servicios (luz, gas, agua, internet)",                       "tipo": "Necesidad"},
+    {"id": "alimentacion",  "nombre": "Alimentación (supermercado)",                                "tipo": "Necesidad"},
+    {"id": "transporte",    "nombre": "Transporte (combustible, abono SUBE, mantenimiento)",        "tipo": "Necesidad"},
+    {"id": "salud",         "nombre": "Salud (obra social, medicamentos, seguros)",                 "tipo": "Necesidad"},
+    {"id": "deudas",        "nombre": "Deudas (cuotas mínimas de créditos / tarjetas)",             "tipo": "Necesidad"},
+    {"id": "suscripciones", "nombre": "Suscripciones (Canva, ChatGPT, iCloud, Netflix, Spotify)",   "tipo": "Deseo"},
+    {"id": "salidas",       "nombre": "Salidas (restaurantes, bares, delivery)",                    "tipo": "Deseo"},
+    {"id": "indumentaria",  "nombre": "Indumentaria (ropa urbana, deportiva)",                      "tipo": "Deseo"},
+    {"id": "ocio",          "nombre": "Ocio (cine, hobbies, viajes cortos)",                        "tipo": "Deseo"},
+    {"id": "otros",         "nombre": "Otros",                                                      "tipo": "Deseo"},
+]
 
 # Pesos del scoring (deben sumar 1.0)
 PESO_TOLERANCIA    = 0.35
@@ -732,11 +747,15 @@ for _k, _v in [('score_tolerancia', 50.0), ('score_capacidad', 50.0),
 def serializar_config():
     """Devuelve bytes JSON con el estado persistible del usuario."""
     payload = {
-        "version": 1,
+        "version": 2,
         "objetivos": st.session_state.objetivos,
         "supuestos": st.session_state.supuestos,
         "tc_USD": float(st.session_state.tc_USD),
         "tc_EUR": float(st.session_state.tc_EUR),
+        "gastos_por_categoria": {
+            c["id"]: float(st.session_state.get(f"gasto_{c['id']}", 0.0))
+            for c in CATEGORIAS_GASTOS
+        },
     }
     return json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
 
@@ -761,6 +780,13 @@ def _aplicar_config(config: dict) -> int:
         st.session_state.tc_USD = float(config["tc_USD"])
     if "tc_EUR" in config:
         st.session_state.tc_EUR = float(config["tc_EUR"])
+    if isinstance(config.get("gastos_por_categoria"), dict):
+        for c in CATEGORIAS_GASTOS:
+            if c["id"] in config["gastos_por_categoria"]:
+                try:
+                    st.session_state[f"gasto_{c['id']}"] = float(config["gastos_por_categoria"][c["id"]])
+                except (TypeError, ValueError):
+                    pass
     return len(st.session_state.objetivos)
 
 
@@ -1156,8 +1182,57 @@ with col_inputs:
     with col_sueldo:
         sueldo = st.number_input(f"Sueldo Neto Mensual ({moneda})", min_value=0.0, step=1000.0)
 
-    total_gastos = st.number_input(f"Total Gastos Fijos Mensuales ({moneda})", min_value=0.0, step=1000.0)
+    with st.expander("📋 Detalle de gastos mensuales por categoría", expanded=True):
+        st.caption(f"Cargá tus gastos en {moneda}. La regla 50/30/20 sugiere ≤ 50% en Necesidades, ≤ 30% en Deseos y ≥ 20% al Ahorro.")
+        _necesidades = [c for c in CATEGORIAS_GASTOS if c["tipo"] == "Necesidad"]
+        _deseos = [c for c in CATEGORIAS_GASTOS if c["tipo"] == "Deseo"]
+        _cn, _cd = st.columns(2)
+        with _cn:
+            st.markdown("**🏠 Necesidades** _(meta ≤ 50%)_")
+            for c in _necesidades:
+                st.number_input(c["nombre"], min_value=0.0, step=500.0, key=f"gasto_{c['id']}")
+        with _cd:
+            st.markdown("**🎯 Deseos** _(meta ≤ 30%)_")
+            for c in _deseos:
+                st.number_input(c["nombre"], min_value=0.0, step=500.0, key=f"gasto_{c['id']}")
+
+    total_necesidades = sum(float(st.session_state.get(f"gasto_{c['id']}", 0.0)) for c in CATEGORIAS_GASTOS if c["tipo"] == "Necesidad")
+    total_deseos = sum(float(st.session_state.get(f"gasto_{c['id']}", 0.0)) for c in CATEGORIAS_GASTOS if c["tipo"] == "Deseo")
+    total_gastos = total_necesidades + total_deseos
     disponible_bruto = float(sueldo - total_gastos)
+
+    if sueldo > 0:
+        pct_n = total_necesidades / sueldo
+        pct_d = total_deseos / sueldo
+        pct_ahorro_potencial = max(0.0, disponible_bruto) / sueldo
+
+        def _render_indicador(label, actual, meta, mayor_es_mejor=False):
+            if mayor_es_mejor:
+                ok, soft = actual >= meta, actual >= meta * 0.7
+            else:
+                ok, soft = actual <= meta, actual <= meta * 1.2
+            color = "#2ECC71" if ok else ("#F1C40F" if soft else "#E74C3C")
+            emoji = "🟢" if ok else ("🟡" if soft else "🔴")
+            simbolo = "≥" if mayor_es_mejor else "≤"
+            bar = min(100.0, actual * 100)
+            return f"""
+            <div style='padding:10px 14px;border:1px solid {color};border-radius:10px;background:rgba(255,255,255,0.02);'>
+              <div style='display:flex;justify-content:space-between;font-size:12px;color:#888;'>
+                <span>{emoji} {label}</span>
+                <span>meta {simbolo} {meta:.0%}</span>
+              </div>
+              <div style='font-size:26px;font-weight:700;color:{color};margin-top:2px;line-height:1.2;'>{actual:.1%}</div>
+              <div style='background:rgba(128,128,128,0.25);height:6px;border-radius:3px;margin-top:8px;overflow:hidden;'>
+                <div style='background:{color};width:{bar}%;height:100%;border-radius:3px;transition:width 0.3s;'></div>
+              </div>
+            </div>
+            """
+
+        ind_cols = st.columns(3)
+        ind_cols[0].markdown(_render_indicador("Necesidades", pct_n, 0.50), unsafe_allow_html=True)
+        ind_cols[1].markdown(_render_indicador("Deseos", pct_d, 0.30), unsafe_allow_html=True)
+        ind_cols[2].markdown(_render_indicador("Ahorro potencial", pct_ahorro_potencial, 0.20, mayor_es_mejor=True), unsafe_allow_html=True)
+        st.caption(f"Total gastos: **{fmt(total_gastos, moneda)}**  ·  Disponible: **{fmt(max(0.0, disponible_bruto), moneda)}**")
 
     st.divider()
     st.subheader("💡 Capacidad de Ahorro")
@@ -1177,9 +1252,9 @@ with col_visual:
     if sueldo > 0:
         remanente_ocio = max(0.0, disponible_bruto - ahorro_dispuesto)
         fig = go.Figure(data=[go.Pie(
-            labels=['Gastos Fijos', 'Ahorro Destinado', 'Remanente Ocio'],
-            values=[total_gastos, ahorro_dispuesto, remanente_ocio],
-            hole=.4, marker_colors=['#262626', '#2ECC71', '#BDC3C7'],
+            labels=['Necesidades', 'Deseos', 'Ahorro Destinado', 'Remanente'],
+            values=[total_necesidades, total_deseos, ahorro_dispuesto, remanente_ocio],
+            hole=.4, marker_colors=['#262626', '#7F8C8D', '#2ECC71', '#BDC3C7'],
         )])
         fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=300)
         st.plotly_chart(fig, use_container_width=True)
@@ -1236,17 +1311,23 @@ if sueldo > 0:
         )
         col.caption(ind["descripcion"])
 
-    # Tips adicionales (conservados del original)
     st.divider()
     st.subheader("🤖 Análisis Automático")
     tips = []
-    ratio_gastos = total_gastos / sueldo
+    ratio_n = total_necesidades / sueldo
+    ratio_d = total_deseos / sueldo
     ratio_ahorro = ahorro_dispuesto / sueldo
 
     if disponible_bruto <= 0:
         tips.append(("error", "🚨 Déficit mensual detectado: tus gastos superan tus ingresos."))
-    if ratio_gastos > RATIO_GASTOS_ALTO:
-        tips.append(("warning", "⚠️ Tus gastos fijos superan el 70% de tu ingreso. La regla 50/30/20 recomienda no más del 50% en necesidades."))
+    if ratio_n > 0.50:
+        tips.append(("warning",
+            f"⚠️ Necesidades en {ratio_n:.0%} del ingreso (regla 50/30/20: máximo 50%). "
+            "Si no podés reducirlas, tu margen de ahorro va a quedar comprometido."))
+    if ratio_d > 0.30:
+        tips.append(("warning",
+            f"⚠️ Deseos en {ratio_d:.0%} del ingreso (máximo recomendado: 30%). "
+            "Acá hay margen para recortar: suscripciones, salidas, compras impulsivas."))
     if ratio_ahorro < RATIO_AHORRO_BAJO:
         tips.append(("info", "📉 Estás ahorrando menos del 10% de tu ingreso. Intentá llevar ese ratio al 20% progresivamente."))
     if ratio_ahorro >= RATIO_AHORRO_OBJETIVO:
@@ -1256,7 +1337,7 @@ if sueldo > 0:
         for tipo, msg in tips:
             getattr(st, tipo)(msg)
     else:
-        st.success("Tu perfil financiero está equilibrado.")
+        st.success("Tu perfil financiero está equilibrado dentro de la regla 50/30/20.")
 
 st.divider()
 
