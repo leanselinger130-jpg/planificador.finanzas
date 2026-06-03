@@ -137,8 +137,6 @@ SUPUESTOS_DEFAULT = {
     "USD": {"inflacion": 3.0, "rendimiento": 5.0},
     "EUR": {"inflacion": 2.5, "rendimiento": 4.0},
 }
-import requests
-
 def obtener_inflacion_actual():
     try:
         url = "https://apis.datos.gob.ar/series/api/series"
@@ -165,7 +163,6 @@ def obtener_inflacion_actual():
     except Exception:
         return 80.0
       SUPUESTOS_DEFAULT["ARS"]["inflacion"] = obtener_inflacion_actual()
-
 # ARS por 1 unidad de la moneda. ARS siempre 1.0 (pivote).
 TIPOS_CAMBIO_DEFAULT = {"ARS": 1.0, "USD": 1200.0, "EUR": 1300.0}
 CASAS_DOLAR = ["oficial", "blue", "bolsa", "contadoconliqui", "cripto", "tarjeta"]
