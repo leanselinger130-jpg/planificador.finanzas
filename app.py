@@ -1277,8 +1277,6 @@ with tab_perfil:
             con_bonos      = k1.checkbox("Bonos", key="con_bon")
             con_etf        = k2.checkbox("ETFs", key="con_etf")
             con_fci        = k2.checkbox("Fondos Comunes", key="con_fci")
-            con_divs       = k3.checkbox("Diversificación", key="con_div")
-            con_inflacion  = k3.checkbox("Efecto de la inflación", key="con_inf")
             _conocimientos = [con_acciones, con_bonos, con_etf, con_fci, con_divs, con_inflacion]
             score_conocimiento = (sum(_conocimientos) / len(_conocimientos)) * 100
 
