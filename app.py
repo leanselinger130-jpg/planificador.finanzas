@@ -5,6 +5,7 @@ import math
 import io
 import json
 import requests
+from datetime import datetime
 from streamlit_local_storage import LocalStorage
 
 LS_KEY = "planificador_finanzas_config"
@@ -710,7 +711,204 @@ def build_excel(rows, perfil_data: tuple = ()):
     return buf.getvalue()
 
 
-st.set_page_config(layout="wide", page_title="Ruta Crítica Financiera", page_icon="💰")
+st.set_page_config(layout="wide", page_title="Cuaderno de Finanzas", page_icon="◐")
+
+# Identidad visual: Cuaderno de Finanzas. Editorial, refinado, cálido.
+# Streamlit no permite rediseño de layout — esto inyecta solo estilo.
+st.markdown("""
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #1F1B16;
+  --paper: #F4EFE6;
+  --paper-deep: #ECE4D2;
+  --accent: #A77B3E;
+  --accent-deep: #8E6932;
+  --success: #3F5B3F;
+  --warning: #A85432;
+  --rule: rgba(31, 27, 22, 0.18);
+  --muted: rgba(31, 27, 22, 0.55);
+  --whisper: rgba(31, 27, 22, 0.08);
+}
+
+/* Fondo: crema con halos sutiles que dan profundidad sin distraer */
+.stApp {
+  background:
+    radial-gradient(ellipse at 8% 0%, rgba(167,123,62,0.07) 0%, transparent 45%),
+    radial-gradient(ellipse at 100% 100%, rgba(63,91,63,0.05) 0%, transparent 50%),
+    var(--paper);
+  color: var(--ink);
+}
+
+/* Tipografía base */
+html, body, .stApp, [data-testid="stMarkdownContainer"],
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+.stMetric label,
+label, button, input, select, textarea {
+  font-family: 'Bricolage Grotesque', system-ui, -apple-system, sans-serif !important;
+  color: var(--ink);
+}
+
+/* Display serif para headers */
+h1, h2, h3, h4, h5,
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3 {
+  font-family: 'Fraunces', Georgia, 'Times New Roman', serif !important;
+  color: var(--ink) !important;
+  font-weight: 500;
+  letter-spacing: -0.018em;
+}
+h1 { font-size: 2.6rem !important; line-height: 1.05; font-weight: 600 !important; letter-spacing: -0.03em; }
+h2 { font-size: 1.7rem !important; font-weight: 500 !important; margin-top: 2.4rem !important; padding-bottom: 0.5rem; border-bottom: 1px solid var(--rule); }
+h3 { font-size: 1.15rem !important; font-weight: 600 !important; letter-spacing: -0.005em; }
+.stApp p, .stApp li { line-height: 1.55; }
+
+/* Divisores editoriales */
+hr {
+  border: none !important;
+  height: 1px !important;
+  background: var(--rule) !important;
+  margin: 2.2rem 0 !important;
+}
+
+/* Botones — tinta sólida + acento dorado al hover */
+.stButton button, .stDownloadButton button, [data-testid="stFormSubmitButton"] button {
+  background: var(--ink) !important;
+  color: var(--paper) !important;
+  border: none !important;
+  border-radius: 2px !important;
+  padding: 0.55rem 1.1rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.015em !important;
+  transition: background 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease !important;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+}
+.stButton button:hover, .stDownloadButton button:hover, [data-testid="stFormSubmitButton"] button:hover {
+  background: var(--accent) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(167,123,62,0.25) !important;
+}
+.stButton button[kind="primary"], [data-testid="stFormSubmitButton"] button {
+  background: var(--accent) !important;
+  color: var(--paper) !important;
+}
+.stButton button[kind="primary"]:hover {
+  background: var(--accent-deep) !important;
+}
+
+/* Inputs — fondo translúcido sobre crema, bordes finos */
+[data-testid="stNumberInput"] input,
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea {
+  background: rgba(255,255,255,0.5) !important;
+  border: 1px solid var(--rule) !important;
+  border-radius: 2px !important;
+  color: var(--ink) !important;
+}
+[data-testid="stNumberInput"] input:focus,
+[data-testid="stTextInput"] input:focus,
+[data-testid="stTextArea"] textarea:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(167,123,62,0.12) !important;
+}
+
+/* Selectbox + select_slider */
+[data-baseweb="select"] > div,
+[data-testid="stSelectbox"] > div {
+  background: rgba(255,255,255,0.5) !important;
+  border-radius: 2px !important;
+}
+
+/* Métricas — sello editorial con regla lateral acento */
+[data-testid="stMetric"] {
+  background: rgba(255,255,255,0.45);
+  padding: 0.85rem 1.1rem;
+  border-radius: 3px;
+  border-left: 2px solid var(--accent);
+  box-shadow: 0 1px 0 var(--whisper);
+}
+[data-testid="stMetricLabel"] {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.68rem !important;
+  color: var(--muted) !important;
+}
+[data-testid="stMetricValue"] {
+  font-family: 'Fraunces', serif !important;
+  font-weight: 600 !important;
+  font-size: 1.6rem !important;
+  letter-spacing: -0.015em;
+}
+
+/* Expanders — placa de papel sobre crema */
+[data-testid="stExpander"] {
+  background: rgba(255,255,255,0.42) !important;
+  border: 1px solid var(--rule) !important;
+  border-radius: 4px !important;
+  box-shadow: 0 1px 0 var(--whisper);
+}
+[data-testid="stExpander"] summary {
+  font-family: 'Fraunces', serif !important;
+  font-weight: 500 !important;
+  font-size: 1.02rem !important;
+}
+
+/* Alertas — más planas, menos screaming */
+[data-testid="stAlert"] {
+  border-radius: 3px !important;
+  border-left-width: 3px !important;
+}
+
+/* Captions más nobles */
+[data-testid="stCaptionContainer"], .stCaption {
+  color: var(--muted) !important;
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+
+/* Tabs y sliders heredan acento */
+[data-baseweb="slider"] [role="slider"] {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+
+/* Pie charts y plotly: que el fondo del paper se vea */
+[data-testid="stPlotlyChart"] {
+  background: transparent !important;
+}
+
+/* Fade-in editorial al cargar */
+.main > .block-container {
+  animation: cuaderno-fade 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes cuaderno-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Sidebar (si la usás): mismo papel */
+[data-testid="stSidebar"] {
+  background: var(--paper-deep) !important;
+  border-right: 1px solid var(--rule);
+}
+
+/* Forzar tipografía en widgets de Streamlit que la pelean */
+.stRadio label, .stCheckbox label, .stSelectbox label,
+.stNumberInput label, .stTextInput label, .stSelectSlider label,
+.stSlider label, .stDateInput label, .stFileUploader label {
+  color: var(--ink) !important;
+  font-weight: 500;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+_MESES_ES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+             "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 
 if 'objetivos' not in st.session_state:
     st.session_state.objetivos = []
@@ -856,8 +1054,44 @@ if _ls_saved and _ls_saved != st.session_state.get("_ls_last_loaded"):
     except (json.JSONDecodeError, TypeError, ValueError):
         pass
 
-st.title("💰 Planificador de Ruta Crítica Financiera")
-st.markdown("Gestión de ahorro por **cascada de prioridades estratégica** con recomendación de inversión.")
+_hoy = datetime.now()
+_n_metas = len(st.session_state.get("objetivos", []))
+_n_metas_label = (
+    "Sin metas todavía" if _n_metas == 0
+    else f"{_n_metas} {'meta activa' if _n_metas == 1 else 'metas activas'}"
+)
+_perfil_chip = "Perfil definido" if st.session_state.get("perfil_completo", False) else "Perfil pendiente"
+
+st.markdown(f"""
+<div style="
+  font-family: 'Bricolage Grotesque', sans-serif;
+  display: flex; justify-content: space-between; align-items: baseline;
+  border-bottom: 1px solid rgba(31,27,22,0.18);
+  padding: 0.2rem 0 0.55rem 0; margin-bottom: 0.4rem;
+  font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase;
+  color: rgba(31,27,22,0.55); font-weight: 500;
+">
+  <span>Boletín · Edición Personal</span>
+  <span>{_MESES_ES[_hoy.month-1]} {_hoy.year}</span>
+  <span style="color: #A77B3E;">◆ {_perfil_chip}</span>
+</div>
+<div style="
+  display: flex; justify-content: space-between; align-items: flex-end;
+  margin: 0.2rem 0 1.6rem 0; gap: 2rem; flex-wrap: wrap;
+">
+  <div>
+    <h1 style="margin: 0; line-height: 1; letter-spacing: -0.035em; font-family: 'Fraunces', Georgia, serif; font-weight: 600; color: #1F1B16;">Cuaderno<br><em style="font-style: italic; color: #A77B3E; font-weight: 400;">de Finanzas</em></h1>
+    <div style="font-family: 'Bricolage Grotesque', sans-serif; color: rgba(31,27,22,0.6); font-size: 0.93rem; margin-top: 0.55rem; max-width: 40rem; line-height: 1.5;">
+      Un espacio para planificar el ahorro con cabeza fría — cascada de prioridades,
+      cobertura de inflación y recomendaciones según tu perfil de inversor.
+    </div>
+  </div>
+  <div style="text-align: right;">
+    <div style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.22em; color: rgba(31,27,22,0.5);">Estado actual</div>
+    <div style="font-family: 'Fraunces', serif; font-size: 1.45rem; font-weight: 500; color: #1F1B16; line-height: 1.15; margin-top: 0.2rem;">{_n_metas_label}</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 st.divider()
 
 st.header("0. Perfil de Inversor Avanzado")
