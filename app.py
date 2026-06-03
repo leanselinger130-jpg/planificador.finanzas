@@ -19,7 +19,6 @@ PRIO_ORDER = {"Alta": 0, "Media": 1, "Baja": 2}
 COLOR_PRIORIDAD = {"Alta": "#E74C3C", "Media": "#F1C40F", "Baja": "#3498DB"}
 MONEDAS = ["ARS", "USD", "EUR"]
 
-# ── PERFIL AVANZADO ────────────────────────────────────────────────────────────
 # Pesos del scoring (deben sumar 1.0)
 PESO_TOLERANCIA    = 0.35
 PESO_CAPACIDAD     = 0.25
@@ -54,8 +53,7 @@ OBJETIVO_HORIZONTE_MINIMO = {
     "Viaje / consumo a corto plazo": 6,    # máximo 6 meses tolerable
 }
 
-# ── MEJORA 3: Mapa Categoría de meta → Objetivo financiero específico ──────────
-# Permite que cada meta use su propio objetivo en el motor de recomendación,
+# Cada meta usa su propio objetivo en el motor de recomendación,
 # en lugar del objetivo general del perfil.
 CATEGORIA_A_OBJETIVO = {
     "Fondo de Emergencia":  "Preservar capital",
@@ -68,7 +66,6 @@ CATEGORIA_A_OBJETIVO = {
     "Otro":                 "Crecimiento patrimonial",
 }
 
-# ── TOOLTIPS de instrumentos financieros ───────────────────────────────────────
 TOOLTIPS_INSTRUMENTOS = {
     "FCI money market": (
         "Fondo Común de Inversión que invierte en activos de muy corto plazo "
@@ -114,7 +111,6 @@ TOOLTIPS_INSTRUMENTOS = {
         "Ejemplos en Argentina: Mercado Pago, Ualá, Naranja X."
     ),
 }
-# ───────────────────────────────────────────────────────────────────────────────
 
 # Defaults editables por el usuario. Inflación y rendimiento son nominales anuales en %.
 SUPUESTOS_DEFAULT = {
@@ -126,63 +122,31 @@ SUPUESTOS_DEFAULT = {
 TIPOS_CAMBIO_DEFAULT = {"ARS": 1.0, "USD": 1200.0, "EUR": 1300.0}
 CASAS_DOLAR = ["oficial", "blue", "bolsa", "contadoconliqui", "cripto", "tarjeta"]
 
-PLAZO_CORTO_MAX = 3
-PLAZO_MEDIO_MAX = 12
-PLAZO_LARGO_MAX = 36
+# (umbral_inclusivo, label, emoji, color) — única fuente de verdad para clasificación por risk score.
+PERFIL_LEVELS = [
+    (20,  "Muy Conservador",  "🔵", "#2196F3"),
+    (40,  "Conservador",      "🟢", "#4CAF50"),
+    (60,  "Moderado",         "🟡", "#FFC107"),
+    (80,  "Moderado Agresivo", "🟠", "#FF9800"),
+    (100, "Agresivo",         "🔴", "#F44336"),
+]
 
-# RECOMENDACIONES legacy — mantenido para compatibilidad; la lógica principal
-# ahora pasa por recomendar_instrumento_avanzado().
-RECOMENDACIONES = {
-    "corto": {
-        "*": {"tipo": "Liquidez / Money Market",
-              "descripcion": "FCI money market o cuenta remunerada. Rescate en 24-48hs, capital preservado.",
-              "emoji": "🟢"},
-    },
-    "medio": {
-        "Bajo": {"tipo": "Renta Fija",
-                 "descripcion": "FCI de renta fija o bonos cortos. Rendimiento moderado, baja volatilidad.",
-                 "emoji": "🟡"},
-        "*": {"tipo": "Renta Fija con cobertura inflacionaria",
-              "descripcion": "FCI renta fija + instrumento indexado UVA/CER. Protege el poder adquisitivo.",
-              "emoji": "🟡"},
-    },
-    "largo": {
-        "Bajo": {"tipo": "Renta Fija Diversificada",
-                 "descripcion": "Mix de bonos y FCI de renta fija a mayor plazo.",
-                 "emoji": "🟠"},
-        "Medio": {"tipo": "Cartera Mixta 60/40",
-                  "descripcion": "60% renta fija + 40% renta variable. Equilibrio entre estabilidad y crecimiento.",
-                  "emoji": "🟠"},
-        "Alto": {"tipo": "Renta Variable",
-                 "descripcion": "Acciones locales o CEDEARs. Mayor volatilidad pero potencial de rendimiento real.",
-                 "emoji": "🔴"},
-    },
-    "muy_largo": {
-        "Bajo": {"tipo": "Renta Fija largo plazo",
-                 "descripcion": "Bonos soberanos o FCI de duration alta.",
-                 "emoji": "🟠"},
-        "*": {"tipo": "Renta Variable / Cartera de crecimiento",
-              "descripcion": "Acciones, CEDEARs o ETFs. El horizonte largo reduce el riesgo.",
-              "emoji": "🔴"},
-    },
-}
-
-
-# ── MOTOR DE PERFILAMIENTO AVANZADO ────────────────────────────────────────────
 
 def clasificar_perfil(score: float) -> tuple[str, str]:
-    """Devuelve (label, emoji) según el Risk Score 0-100."""
-    if score <= 20:
-        return "Muy Conservador", "🔵"
-    if score <= 40:
-        return "Conservador", "🟢"
-    if score <= 60:
-        return "Moderado", "🟡"
-    if score <= 80:
-        return "Moderado Agresivo", "🟠"
-    return "Agresivo", "🔴"
+    for umbral, label, emoji, _ in PERFIL_LEVELS:
+        if score <= umbral:
+            return label, emoji
+    return PERFIL_LEVELS[-1][1], PERFIL_LEVELS[-1][2]
 
 
+def color_perfil(score: float) -> str:
+    for umbral, _label, _emoji, color in PERFIL_LEVELS:
+        if score <= umbral:
+            return color
+    return PERFIL_LEVELS[-1][3]
+
+
+@st.cache_data
 def recomendar_instrumento_avanzado(
     risk_score: float,
     plazo_meses: int,
@@ -340,28 +304,12 @@ def recomendar_instrumento_avanzado(
         ),
         "emoji": "🔴",
     }
-# ───────────────────────────────────────────────────────────────────────────────
+
 
 EXPORT_COLUMNS = ["Meta", "Categoría", "Prioridad", "Moneda",
                   "Costo Total", "Costo Futuro Estimado", "Ya Ahorrado",
                   "Plazo (Meses)", "Cuota Ideal", "Monto Asignado",
                   "Estado", "Instrumento Sugerido"]
-
-
-def _bucket_plazo(meses):
-    if meses <= PLAZO_CORTO_MAX:
-        return "corto"
-    if meses <= PLAZO_MEDIO_MAX:
-        return "medio"
-    if meses <= PLAZO_LARGO_MAX:
-        return "largo"
-    return "muy_largo"
-
-
-@st.cache_data
-def recomendar_instrumento(plazo_meses, perfil, risk_score=50, objetivo="Crecimiento patrimonial", conocimiento_score=50):
-    """Wrapper unificado. Usa el motor avanzado cuando hay risk_score disponible."""
-    return recomendar_instrumento_avanzado(risk_score, plazo_meses, objetivo, conocimiento_score)
 
 
 def convertir(monto, de_moneda, a_moneda, tipos_cambio):
@@ -371,6 +319,10 @@ def convertir(monto, de_moneda, a_moneda, tipos_cambio):
     if tc_destino <= 0:
         return monto
     return monto * tipos_cambio[de_moneda] / tc_destino
+
+
+def _tasa_mensual(tasa_anual_pct):
+    return (1 + tasa_anual_pct / 100) ** (1 / 12) - 1
 
 
 def calcular_cuota_meta(obj, supuestos):
@@ -432,7 +384,9 @@ def estado_meta(cuota_asignada, cuota_ideal):
 
 
 def fmt(monto, codigo):
-    return f"{codigo} {monto:,.2f}"    
+    return f"{codigo} {monto:,.2f}"
+
+
 DTYPES_OBJETIVOS = {
     "Costo Total": "float64",
     "Ya Ahorrado": "float64",
@@ -442,7 +396,10 @@ DTYPES_OBJETIVOS = {
 def _normalizar_df(df, moneda_fallback):
     """Limpia y normaliza dtypes del DataFrame de objetivos para comparación segura."""
     df = df.copy()
-    df["Moneda"] = df["Moneda"].fillna(moneda_fallback)
+    if "Moneda" not in df.columns:
+        df["Moneda"] = moneda_fallback
+    else:
+        df["Moneda"] = df["Moneda"].fillna(moneda_fallback)
     df = df.dropna(subset=["Meta", "Costo Total", "Plazo (Meses)"])
     df = df[df["Meta"].astype(str).str.strip() != ""]
     for col, dt in DTYPES_OBJETIVOS.items():
@@ -454,7 +411,7 @@ def _normalizar_df(df, moneda_fallback):
             df[col] = df[col].astype(dt)
     return df.reset_index(drop=True)
 
-# ── MEJORA 1: Proyección temporal de capital acumulado ────────────────────────
+@st.cache_data
 def proyectar_capital(
     ahorrado_presente: float,
     cuota_mensual: float,
@@ -531,13 +488,13 @@ def grafico_proyeccion(obj_enriquecido: dict, supuestos: dict) -> go.Figure:
     return fig
 
 
-# ── MEJORA 2: Diagnóstico de Salud Financiera ─────────────────────────────────
+@st.cache_data
 def calcular_indicadores_salud(
     sueldo: float,
     total_gastos: float,
     ahorro_dispuesto: float,
-    fondo_emergencia_meses: float,   # meses cubiertos por el fondo
-    deuda_mensual: float = 0.0,      # cuota total de deudas por mes
+    fondo_emergencia_meses: float,
+    deuda_mensual: float = 0.0,
 ) -> list[dict]:
     """
     Calcula KPIs financieros clave y devuelve una lista de dicts con:
@@ -856,180 +813,180 @@ st.markdown(
 )
 
 with st.expander("📋 Completar / actualizar mi perfil de inversor", expanded=not st.session_state.perfil_completo):
+    with st.form("perfil_form"):
+        st.subheader("① Tolerancia psicológica al riesgo  ·  35% del score")
+        col_t1, col_t2 = st.columns(2)
 
-    st.subheader("① Tolerancia psicológica al riesgo  ·  35% del score")
-    col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            r_10 = st.radio(
+                "Si tu cartera baja **10%** en un mes, ¿qué hacés?",
+                ["Vendo todo inmediatamente", "Me preocupo pero no hago nada",
+                 "Espero y monitoreo", "Compro más (oportunidad)"],
+                key="r_10",
+            )
+            r_20 = st.radio(
+                "Si baja **20%**, ¿qué hacés?",
+                ["Vendo todo inmediatamente", "Vendo una parte para reducir pérdidas",
+                 "Mantengo sin cambios", "Compro más"],
+                key="r_20",
+            )
+            r_30 = st.radio(
+                "Si baja **30%**, ¿qué hacés?",
+                ["Vendo todo de inmediato", "Vendo la mitad",
+                 "Mantengo y espero recuperación", "Compro más agresivamente"],
+                key="r_30",
+            )
 
-    with col_t1:
-        r_10 = st.radio(
-            "Si tu cartera baja **10%** en un mes, ¿qué hacés?",
-            ["Vendo todo inmediatamente", "Me preocupo pero no hago nada",
-             "Espero y monitoreo", "Compro más (oportunidad)"],
-            key="r_10",
-        )
-        r_20 = st.radio(
-            "Si baja **20%**, ¿qué hacés?",
-            ["Vendo todo inmediatamente", "Vendo una parte para reducir pérdidas",
-             "Mantengo sin cambios", "Compro más"],
-            key="r_20",
-        )
-        r_30 = st.radio(
-            "Si baja **30%**, ¿qué hacés?",
-            ["Vendo todo de inmediato", "Vendo la mitad",
-             "Mantengo y espero recuperación", "Compro más agresivamente"],
-            key="r_30",
-        )
+        with col_t2:
+            r_pref = st.radio(
+                "¿Qué te importa más al invertir?",
+                ["No perder dinero bajo ninguna circunstancia",
+                 "Un poco de crecimiento con mínima volatilidad",
+                 "Balance entre estabilidad y rendimiento",
+                 "Maximizar rendimiento aunque haya caídas fuertes"],
+                key="r_pref",
+            )
+            r_crisis = st.radio(
+                "¿Cómo reaccionaste en crisis financieras anteriores (2018, 2020, etc.)?",
+                ["Vendí y salí del mercado", "Me angustié mucho pero no hice nada",
+                 "Lo tomé con calma", "Aproveché para comprar más",
+                 "No tenía inversiones aún"],
+                key="r_crisis",
+            )
 
-    with col_t2:
-        r_pref = st.radio(
-            "¿Qué te importa más al invertir?",
-            ["No perder dinero bajo ninguna circunstancia",
-             "Un poco de crecimiento con mínima volatilidad",
-             "Balance entre estabilidad y rendimiento",
-             "Maximizar rendimiento aunque haya caídas fuertes"],
-            key="r_pref",
-        )
-        r_crisis = st.radio(
-            "¿Cómo reaccionaste en crisis financieras anteriores (2018, 2020, etc.)?",
-            ["Vendí y salí del mercado", "Me angustié mucho pero no hice nada",
-             "Lo tomé con calma", "Aproveché para comprar más",
-             "No tenía inversiones aún"],
-            key="r_crisis",
-        )
+        _t_10   = {"Vendo todo inmediatamente": 0, "Me preocupo pero no hago nada": 33,
+                   "Espero y monitoreo": 67, "Compro más (oportunidad)": 100}
+        _t_20   = {"Vendo todo inmediatamente": 0, "Vendo una parte para reducir pérdidas": 25,
+                   "Mantengo sin cambios": 65, "Compro más": 100}
+        _t_30   = {"Vendo todo de inmediato": 0, "Vendo la mitad": 20,
+                   "Mantengo y espero recuperación": 60, "Compro más agresivamente": 100}
+        _t_pref = {"No perder dinero bajo ninguna circunstancia": 0,
+                   "Un poco de crecimiento con mínima volatilidad": 30,
+                   "Balance entre estabilidad y rendimiento": 60,
+                   "Maximizar rendimiento aunque haya caídas fuertes": 100}
+        _t_cris = {"Vendí y salí del mercado": 0, "Me angustié mucho pero no hice nada": 25,
+                   "Lo tomé con calma": 60, "Aproveché para comprar más": 100,
+                   "No tenía inversiones aún": 50}
 
-    # Scoring tolerancia (0-100)
-    _t_10   = {"Vendo todo inmediatamente": 0, "Me preocupo pero no hago nada": 33,
-               "Espero y monitoreo": 67, "Compro más (oportunidad)": 100}
-    _t_20   = {"Vendo todo inmediatamente": 0, "Vendo una parte para reducir pérdidas": 25,
-               "Mantengo sin cambios": 65, "Compro más": 100}
-    _t_30   = {"Vendo todo de inmediato": 0, "Vendo la mitad": 20,
-               "Mantengo y espero recuperación": 60, "Compro más agresivamente": 100}
-    _t_pref = {"No perder dinero bajo ninguna circunstancia": 0,
-               "Un poco de crecimiento con mínima volatilidad": 30,
-               "Balance entre estabilidad y rendimiento": 60,
-               "Maximizar rendimiento aunque haya caídas fuertes": 100}
-    _t_cris = {"Vendí y salí del mercado": 0, "Me angustié mucho pero no hice nada": 25,
-               "Lo tomé con calma": 60, "Aproveché para comprar más": 100,
-               "No tenía inversiones aún": 50}
-
-    score_tolerancia = (
-        _t_10.get(r_10, 50) * 0.20 +
-        _t_20.get(r_20, 50) * 0.25 +
-        _t_30.get(r_30, 50) * 0.25 +
-        _t_pref.get(r_pref, 50) * 0.20 +
-        _t_cris.get(r_crisis, 50) * 0.10
-    )
-
-    st.divider()
-    st.subheader("② Capacidad financiera para asumir riesgo  ·  25% del score")
-    cf1, cf2, cf3 = st.columns(3)
-
-    with cf1:
-        r_emerg = st.radio(
-            "¿Tenés fondo de emergencia (3-6 meses de gastos)?",
-            ["No tengo", "Menos de 1 mes", "1 a 3 meses", "3 a 6 meses", "Más de 6 meses"],
-            key="r_emerg",
-        )
-        r_estab = st.radio(
-            "Estabilidad laboral / fuente de ingresos",
-            ["Inestable / desempleo reciente", "Freelance / variable",
-             "Relación de dependencia estable", "Múltiples fuentes de ingresos"],
-            key="r_estab",
-        )
-    with cf2:
-        r_deuda = st.radio(
-            "Nivel de endeudamiento respecto a tus ingresos",
-            ["Más del 50% de ingresos en deudas", "Entre 30% y 50%",
-             "Entre 10% y 30%", "Menos del 10% o sin deudas"],
-            key="r_deuda",
-        )
-        r_ahorro_pct = st.radio(
-            "¿Qué porcentaje de tu ingreso ahorrás habitualmente?",
-            ["No ahorro / gasto más de lo que gano", "Menos del 5%",
-             "Entre 5% y 15%", "Entre 15% y 30%", "Más del 30%"],
-            key="r_ahorro_pct",
-        )
-    with cf3:
-        r_depend = st.radio(
-            "Dependientes económicos a tu cargo",
-            ["3 o más", "2", "1", "Ninguno"],
-            key="r_depend",
+        score_tolerancia = (
+            _t_10.get(r_10, 50) * 0.20 +
+            _t_20.get(r_20, 50) * 0.25 +
+            _t_30.get(r_30, 50) * 0.25 +
+            _t_pref.get(r_pref, 50) * 0.20 +
+            _t_cris.get(r_crisis, 50) * 0.10
         )
 
-    _c_emerg  = {"No tengo": 0, "Menos de 1 mes": 15, "1 a 3 meses": 40,
-                 "3 a 6 meses": 75, "Más de 6 meses": 100}
-    _c_estab  = {"Inestable / desempleo reciente": 0, "Freelance / variable": 35,
-                 "Relación de dependencia estable": 70, "Múltiples fuentes de ingresos": 100}
-    _c_deuda  = {"Más del 50% de ingresos en deudas": 0, "Entre 30% y 50%": 25,
-                 "Entre 10% y 30%": 60, "Menos del 10% o sin deudas": 100}
-    _c_aho    = {"No ahorro / gasto más de lo que gano": 0, "Menos del 5%": 20,
-                 "Entre 5% y 15%": 50, "Entre 15% y 30%": 80, "Más del 30%": 100}
-    _c_dep    = {"3 o más": 10, "2": 40, "1": 65, "Ninguno": 100}
+        st.divider()
+        st.subheader("② Capacidad financiera para asumir riesgo  ·  25% del score")
+        cf1, cf2, cf3 = st.columns(3)
 
-    score_capacidad = (
-        _c_emerg.get(r_emerg, 50)   * 0.30 +
-        _c_estab.get(r_estab, 50)   * 0.25 +
-        _c_deuda.get(r_deuda, 50)   * 0.25 +
-        _c_aho.get(r_ahorro_pct, 50) * 0.10 +
-        _c_dep.get(r_depend, 50)    * 0.10
-    )
+        with cf1:
+            r_emerg = st.radio(
+                "¿Tenés fondo de emergencia (3-6 meses de gastos)?",
+                ["No tengo", "Menos de 1 mes", "1 a 3 meses", "3 a 6 meses", "Más de 6 meses"],
+                key="r_emerg",
+            )
+            r_estab = st.radio(
+                "Estabilidad laboral / fuente de ingresos",
+                ["Inestable / desempleo reciente", "Freelance / variable",
+                 "Relación de dependencia estable", "Múltiples fuentes de ingresos"],
+                key="r_estab",
+            )
+        with cf2:
+            r_deuda = st.radio(
+                "Nivel de endeudamiento respecto a tus ingresos",
+                ["Más del 50% de ingresos en deudas", "Entre 30% y 50%",
+                 "Entre 10% y 30%", "Menos del 10% o sin deudas"],
+                key="r_deuda",
+            )
+            r_ahorro_pct = st.radio(
+                "¿Qué porcentaje de tu ingreso ahorrás habitualmente?",
+                ["No ahorro / gasto más de lo que gano", "Menos del 5%",
+                 "Entre 5% y 15%", "Entre 15% y 30%", "Más del 30%"],
+                key="r_ahorro_pct",
+            )
+        with cf3:
+            r_depend = st.radio(
+                "Dependientes económicos a tu cargo",
+                ["3 o más", "2", "1", "Ninguno"],
+                key="r_depend",
+            )
 
-    st.divider()
-    st.subheader("③ Horizonte temporal  ·  20% del score")
-    r_horizonte = st.select_slider(
-        "¿En cuánto tiempo necesitás o querés disponer del capital invertido?",
-        options=["Menos de 1 año", "1 a 3 años", "3 a 5 años", "5 a 10 años", "Más de 10 años"],
-        value="3 a 5 años",
-        key="r_horizonte",
-    )
-    _h_score = {"Menos de 1 año": 5, "1 a 3 años": 25, "3 a 5 años": 55,
-                "5 a 10 años": 80, "Más de 10 años": 100}
-    score_horizonte = float(_h_score.get(r_horizonte, 50))
+        _c_emerg  = {"No tengo": 0, "Menos de 1 mes": 15, "1 a 3 meses": 40,
+                     "3 a 6 meses": 75, "Más de 6 meses": 100}
+        _c_estab  = {"Inestable / desempleo reciente": 0, "Freelance / variable": 35,
+                     "Relación de dependencia estable": 70, "Múltiples fuentes de ingresos": 100}
+        _c_deuda  = {"Más del 50% de ingresos en deudas": 0, "Entre 30% y 50%": 25,
+                     "Entre 10% y 30%": 60, "Menos del 10% o sin deudas": 100}
+        _c_aho    = {"No ahorro / gasto más de lo que gano": 0, "Menos del 5%": 20,
+                     "Entre 5% y 15%": 50, "Entre 15% y 30%": 80, "Más del 30%": 100}
+        _c_dep    = {"3 o más": 10, "2": 40, "1": 65, "Ninguno": 100}
 
-    st.divider()
-    st.subheader("④ Conocimiento financiero  ·  10% del score")
-    st.caption("Marcá los instrumentos que conocés y sabés cómo funcionan (no solo que existen).")
-    k1, k2, k3 = st.columns(3)
-    con_acciones   = k1.checkbox("Acciones (compra/venta, dividendos)", key="con_acc")
-    con_bonos      = k1.checkbox("Bonos (TIR, duration, calificación)", key="con_bon")
-    con_etf        = k2.checkbox("ETFs (estructura, tracking error)", key="con_etf")
-    con_fci        = k2.checkbox("Fondos Comunes de Inversión", key="con_fci")
-    con_divs       = k3.checkbox("Diversificación y correlación de activos", key="con_div")
-    con_inflacion  = k3.checkbox("Efecto de la inflación en rendimientos reales", key="con_inf")
+        score_capacidad = (
+            _c_emerg.get(r_emerg, 50)   * 0.30 +
+            _c_estab.get(r_estab, 50)   * 0.25 +
+            _c_deuda.get(r_deuda, 50)   * 0.25 +
+            _c_aho.get(r_ahorro_pct, 50) * 0.10 +
+            _c_dep.get(r_depend, 50)    * 0.10
+        )
 
-    _conocimientos = [con_acciones, con_bonos, con_etf, con_fci, con_divs, con_inflacion]
-    score_conocimiento = (sum(_conocimientos) / len(_conocimientos)) * 100
+        st.divider()
+        st.subheader("③ Horizonte temporal  ·  20% del score")
+        r_horizonte = st.select_slider(
+            "¿En cuánto tiempo necesitás o querés disponer del capital invertido?",
+            options=["Menos de 1 año", "1 a 3 años", "3 a 5 años", "5 a 10 años", "Más de 10 años"],
+            value="3 a 5 años",
+            key="r_horizonte",
+        )
+        _h_score = {"Menos de 1 año": 5, "1 a 3 años": 25, "3 a 5 años": 55,
+                    "5 a 10 años": 80, "Más de 10 años": 100}
+        score_horizonte = float(_h_score.get(r_horizonte, 50))
 
-    st.divider()
-    st.subheader("⑤ Objetivo financiero principal  ·  10% del score")
-    r_objetivo = st.selectbox(
-        "¿Cuál es el objetivo principal de esta inversión?",
-        OBJETIVOS_FINANCIEROS,
-        index=4,
-        key="r_objetivo",
-    )
-    _base_obj = 50.0
-    score_objetivo = max(0.0, min(100.0, _base_obj + OBJETIVO_SCORE_AJUSTE.get(r_objetivo, 0)))
+        st.divider()
+        st.subheader("④ Conocimiento financiero  ·  10% del score")
+        st.caption("Marcá los instrumentos que conocés y sabés cómo funcionan (no solo que existen).")
+        k1, k2, k3 = st.columns(3)
+        con_acciones   = k1.checkbox("Acciones (compra/venta, dividendos)", key="con_acc")
+        con_bonos      = k1.checkbox("Bonos (TIR, duration, calificación)", key="con_bon")
+        con_etf        = k2.checkbox("ETFs (estructura, tracking error)", key="con_etf")
+        con_fci        = k2.checkbox("Fondos Comunes de Inversión", key="con_fci")
+        con_divs       = k3.checkbox("Diversificación y correlación de activos", key="con_div")
+        con_inflacion  = k3.checkbox("Efecto de la inflación en rendimientos reales", key="con_inf")
 
-    # ── Cálculo del Risk Score ponderado ─────────────────────────────────────
-    raw_score = (
-        score_tolerancia   * PESO_TOLERANCIA   +
-        score_capacidad    * PESO_CAPACIDAD    +
-        score_horizonte    * PESO_HORIZONTE    +
-        score_conocimiento * PESO_CONOCIMIENTO +
-        score_objetivo     * PESO_OBJETIVO
-    )
-    risk_score_calculado = round(max(0.0, min(100.0, raw_score)), 1)
-    perfil_label, perfil_emoji = clasificar_perfil(risk_score_calculado)
+        _conocimientos = [con_acciones, con_bonos, con_etf, con_fci, con_divs, con_inflacion]
+        score_conocimiento = (sum(_conocimientos) / len(_conocimientos)) * 100
 
-    st.divider()
-    if st.button("✅ Calcular mi Risk Score", type="primary", use_container_width=True):
+        st.divider()
+        st.subheader("⑤ Objetivo financiero principal  ·  10% del score")
+        r_objetivo = st.selectbox(
+            "¿Cuál es el objetivo principal de esta inversión?",
+            OBJETIVOS_FINANCIEROS,
+            index=4,
+            key="r_objetivo",
+        )
+        _base_obj = 50.0
+        score_objetivo = max(0.0, min(100.0, _base_obj + OBJETIVO_SCORE_AJUSTE.get(r_objetivo, 0)))
+
+        raw_score = (
+            score_tolerancia   * PESO_TOLERANCIA   +
+            score_capacidad    * PESO_CAPACIDAD    +
+            score_horizonte    * PESO_HORIZONTE    +
+            score_conocimiento * PESO_CONOCIMIENTO +
+            score_objetivo     * PESO_OBJETIVO
+        )
+        risk_score_calculado = round(max(0.0, min(100.0, raw_score)), 1)
+
+        st.divider()
+        submitted_perfil = st.form_submit_button(
+            "✅ Calcular mi Risk Score", type="primary", use_container_width=True,
+        )
+
+    if submitted_perfil:
         st.session_state.risk_score           = risk_score_calculado
         st.session_state.objetivo_financiero  = r_objetivo
         st.session_state.horizonte_perfil     = r_horizonte
         st.session_state.conocimiento_score   = score_conocimiento
         st.session_state.perfil_completo      = True
-        # Guardar scores parciales para el Excel
         st.session_state.score_tolerancia     = round(score_tolerancia, 1)
         st.session_state.score_capacidad      = round(score_capacidad, 1)
         st.session_state.score_horizonte      = round(score_horizonte, 1)
@@ -1037,19 +994,13 @@ with st.expander("📋 Completar / actualizar mi perfil de inversor", expanded=n
         st.session_state.score_objetivo       = round(score_objetivo, 1)
         st.rerun()
 
-# ── Tarjeta de resultados del perfil ─────────────────────────────────────────
 risk_score          = st.session_state.risk_score
 objetivo_financiero = st.session_state.objetivo_financiero
 horizonte_perfil    = st.session_state.horizonte_perfil
 conocimiento_score  = st.session_state.conocimiento_score
 perfil_label_show, perfil_emoji_show = clasificar_perfil(risk_score)
 
-_score_color = (
-    "#2196F3" if risk_score <= 20 else
-    "#4CAF50" if risk_score <= 40 else
-    "#FFC107" if risk_score <= 60 else
-    "#FF9800" if risk_score <= 80 else "#F44336"
-)
+_score_color = color_perfil(risk_score)
 _bar_pct = int(risk_score)
 
 st.markdown(f"""
@@ -1176,7 +1127,7 @@ with col_inputs:
     ahorro_dispuesto = 0.0
     if sueldo > 0:
         if disponible_bruto > 0:
-            st.info(f"Excedente disponible: **{moneda} {disponible_bruto:,.2f}**")
+            st.info(f"Excedente disponible: **{fmt(disponible_bruto, moneda)}**")
             ahorro_dispuesto = st.slider(
                 "¿Cuánto vas a destinar al ahorro/inversión?",
                 0.0, disponible_bruto, value=disponible_bruto * DEFAULT_AHORRO_RATIO, step=500.0,
@@ -1274,7 +1225,6 @@ st.divider()
 
 st.header("2. Definición y Gestión de Objetivos")
 
-# ── Mejora 6: alerta si no hay meta de fondo de emergencia ────────────────────
 if st.session_state.objetivos:
     tiene_fondo = any(
         o.get("Categoría") == "Fondo de Emergencia"
@@ -1326,16 +1276,10 @@ objetivos_enriquecidos = []
 
 with col_lista:
     if st.session_state.objetivos:
-        df_base = pd.DataFrame(st.session_state.objetivos)
-        if "Moneda" not in df_base.columns:
-            df_base["Moneda"] = moneda
-        else:
-            df_base["Moneda"] = df_base["Moneda"].fillna(moneda)
-
-        df_base['Cuota Requerida'] = [
-            calcular_cuota_meta(o, supuestos)["cuota_ideal"]
-            for o in df_base.to_dict('records')
-        ]
+        df_base = _normalizar_df(pd.DataFrame(st.session_state.objetivos), moneda_fallback=moneda)
+        records = df_base.to_dict('records')
+        cuotas_por_idx = [calcular_cuota_meta(r, supuestos) for r in records]
+        df_base['Cuota Requerida'] = [c["cuota_ideal"] for c in cuotas_por_idx]
 
         st.subheader("Listado Estratégico")
         edited_df = st.data_editor(
@@ -1355,24 +1299,18 @@ with col_lista:
             key="editor_cascada_final",
         )
 
-        cleaned = _normalizar_df(
-            edited_df.drop(columns=["Cuota Requerida"]),
-            moneda_fallback=moneda,
-        )
-        actual = _normalizar_df(
-            pd.DataFrame(st.session_state.objetivos),
-            moneda_fallback=moneda,
-        )
-        cols_comunes = [c for c in cleaned.columns if c in actual.columns]
-        if not cleaned[cols_comunes].equals(actual[cols_comunes]):
+        cleaned = _normalizar_df(edited_df.drop(columns=["Cuota Requerida"]), moneda_fallback=moneda)
+        df_actual = df_base.drop(columns=["Cuota Requerida"])
+        cols_comunes = [c for c in cleaned.columns if c in df_actual.columns]
+        if not cleaned[cols_comunes].equals(df_actual[cols_comunes]):
             st.session_state.objetivos = cleaned.to_dict("records")
             st.rerun()
 
-        objs_sorted = sorted(st.session_state.objetivos, key=lambda x: PRIO_ORDER.get(x.get("Prioridad"), 3))
+        sorted_indexed = sorted(enumerate(records), key=lambda t: PRIO_ORDER.get(t[1].get("Prioridad"), 3))
         ahorro_restante_ingreso = ahorro_dispuesto
 
-        for obj in objs_sorted:
-            cuota = calcular_cuota_meta(obj, supuestos)
+        for orig_idx, obj in sorted_indexed:
+            cuota = cuotas_por_idx[orig_idx]
             moneda_m = cuota["moneda_meta"]
             cuota_ideal_meta = cuota["cuota_ideal"]
             cuota_ideal_ingreso = convertir(cuota_ideal_meta, moneda_m, moneda, tipos_cambio)
@@ -1395,18 +1333,15 @@ with col_lista:
                 "objetivo_meta": CATEGORIA_A_OBJETIVO.get(
                     obj.get("Categoría", "Otro"), objetivo_financiero
                 ),
-                "instrumento": recomendar_instrumento(
+                "instrumento": recomendar_instrumento_avanzado(
+                    risk_score,
                     obj.get("Plazo (Meses)", 0),
-                    perfil,
-                    risk_score=risk_score,
-                    objetivo=CATEGORIA_A_OBJETIVO.get(
-                        obj.get("Categoría", "Otro"), objetivo_financiero
-                    ),
-                    conocimiento_score=conocimiento_score,
+                    CATEGORIA_A_OBJETIVO.get(obj.get("Categoría", "Otro"), objetivo_financiero),
+                    conocimiento_score,
                 ),
             })
 
-        st.info(f"💰 Ahorro sobrante tras cubrir prioridades: **{moneda} {ahorro_restante_ingreso:,.2f}**")
+        st.info(f"💰 Ahorro sobrante tras cubrir prioridades: **{fmt(ahorro_restante_ingreso, moneda)}**")
     else:
         st.info("Cargá una meta para ver la tabla.")
 
