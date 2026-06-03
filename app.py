@@ -1397,7 +1397,7 @@ with tab_metas:
 
             st.subheader("Listado Estratégico")
             edited_df = st.data_editor(
-                df_base, num_rows="fixed", use_container_width=True,
+                df_base, num_rows="dynamic", use_container_width=True,
                 column_config={
                     "Categoría": st.column_config.SelectboxColumn("Categoría", options=CATEGORIAS),
                     "Prioridad": st.column_config.SelectboxColumn("Prioridad", options=PRIORIDADES),
@@ -1417,6 +1417,16 @@ with tab_metas:
             if not cleaned[cols_comunes].equals(df_actual[cols_comunes]):
                 st.session_state.objetivos = cleaned.to_dict("records")
                 st.rerun()
+
+            st.caption("Borrar metas individualmente:")
+            for i, obj in enumerate(st.session_state.objetivos):
+                col_nombre, col_borrar = st.columns([6, 1])
+                col_nombre.markdown(
+                    f"**{obj['Meta']}** · _{obj['Categoría']}_"
+                )
+                if col_borrar.button("🗑️", key=f"borrar_meta_{i}", help=f"Borrar {obj['Meta']}"):
+                    st.session_state.objetivos.pop(i)
+                    st.rerun()
 
             sorted_indexed = sorted(enumerate(records), key=lambda t: PRIO_ORDER.get(t[1].get("Prioridad"), 3))
             ahorro_restante_ingreso = ahorro_dispuesto
