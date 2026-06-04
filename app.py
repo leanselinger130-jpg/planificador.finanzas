@@ -1680,7 +1680,8 @@ with tab_plan:
                         config=types.GenerateContentConfig(
                             system_instruction=system_prompt,
                             temperature=0.6,
-                            max_output_tokens=1500,
+                            max_output_tokens=3000,
+                            thinking_config=types.ThinkingConfig(thinking_budget=0),
                         ),
                     )
 
