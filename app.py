@@ -1673,7 +1673,7 @@ with tab_plan:
             try:
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(
-                    "gemini-1.5-flash",
+                    "gemini-1.5-flash-latest",
                     system_instruction=system_prompt,
                 )
                 with st.spinner("🧠 Tu asesor de IA está analizando tu plan…"):
