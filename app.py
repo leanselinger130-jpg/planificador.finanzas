@@ -1663,10 +1663,10 @@ with tab_plan:
             "sin jerga innecesaria."
         )
 
-        api_key = st.secrets.get("GOOGLE_API_KEY", "").strip()
+        api_key = st.secrets.get("GEMINI_API_KEY", "").strip()
         if not api_key:
             st.error(
-                "⚠️ Falta configurar `GOOGLE_API_KEY` en `.streamlit/secrets.toml`. "
+                "⚠️ Falta configurar `GEMINI_API_KEY` en `.streamlit/secrets.toml`. "
                 "Sin esa key no puedo consultar a Gemini."
             )
         else:
