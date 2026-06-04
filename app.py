@@ -1673,7 +1673,7 @@ with tab_plan:
             try:
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(
-                    "gemini-2.0-flash",
+                    "gemini-1.5-flash",
                     system_instruction=system_prompt,
                 )
                 with st.spinner("🧠 Tu asesor de IA está analizando tu plan…"):
@@ -1687,7 +1687,7 @@ with tab_plan:
 
                 with st.container(border=True):
                     st.caption(
-                        "✨ *Análisis generado por Gemini 2.0 Flash en base a los datos cargados en tu sesión.*"
+                        "✨ *Análisis generado por Gemini 1.5 Flash en base a los datos cargados en tu sesión.*"
                     )
                     st.markdown(response.text)
             except Exception as e:
