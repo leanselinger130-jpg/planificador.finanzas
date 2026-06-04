@@ -5,7 +5,8 @@ import math
 import io
 import json
 import requests
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from datetime import datetime
 from streamlit_local_storage import LocalStorage
 
@@ -1671,23 +1672,21 @@ with tab_plan:
             )
         else:
             try:
-                genai.configure(api_key=api_key)
-                model = genai.GenerativeModel(
-                    "gemini-1.5-flash-latest",
-                    system_instruction=system_prompt,
-                )
+                client = genai.Client(api_key=api_key)
                 with st.spinner("🧠 Tu asesor de IA está analizando tu plan…"):
-                    response = model.generate_content(
-                        contexto_usuario,
-                        generation_config={
-                            "temperature": 0.6,
-                            "max_output_tokens": 1500,
-                        },
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=contexto_usuario,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_prompt,
+                            temperature=0.6,
+                            max_output_tokens=1500,
+                        ),
                     )
 
                 with st.container(border=True):
                     st.caption(
-                        "✨ *Análisis generado por Gemini 1.5 Flash en base a los datos cargados en tu sesión.*"
+                        "✨ *Análisis generado por Gemini 2.5 Flash en base a los datos cargados en tu sesión.*"
                     )
                     st.markdown(response.text)
             except Exception as e:
