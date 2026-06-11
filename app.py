@@ -958,7 +958,13 @@ with st.sidebar:
     with st.expander("Tipos de cambio", expanded=False):
         st.number_input("USD → ARS", min_value=0.01, step=10.0, key="tc_USD")
         st.number_input("EUR → ARS", min_value=0.01, step=10.0, key="tc_EUR")
-        st.selectbox("Casa para actualizar USD", CASAS_DOLAR, index=2, key="casa_dolar")
+        st.selectbox(
+            "Tipo de cotización USD",
+            CASAS_DOLAR,
+            index=CASAS_DOLAR.index("blue"),
+            key="casa_dolar",
+            help="Cuál cotización usar como referencia para el conversor (oficial, blue, MEP, CCL, cripto o tarjeta).",
+        )
 
         st.button("🔄 Actualizar desde dolarapi.com",
                   on_click=actualizar_cotizaciones_callback,
@@ -1621,6 +1627,7 @@ with tab_metas:
                     "Ya Ahorrado": st.column_config.NumberColumn("Ahorrado Hoy", format="%.2f"),
                     "Cuota Requerida": st.column_config.NumberColumn(
                         "Cuota Requerida", format="%.2f", disabled=True,
+                        help="Calculada automáticamente con la fórmula de anualidad (inflación + rendimiento). No editable.",
                     ),
                 },
                 key="editor_cascada_final",
@@ -1910,7 +1917,7 @@ with tab_plan:
     st.download_button(
         label="📥 Exportar reporte a Excel",
         data=build_excel(filas, perfil_data=perfil_data_export),
-        file_name="ruta_critica_financiera.xlsx",
+        file_name=f"ruta_critica_{datetime.now():%Y-%m-%d}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
@@ -1920,3 +1927,6 @@ if not st.session_state.get("_ls_disabled"):
     if _current_json != st.session_state.get("_ls_last_saved"):
         _ls.setItem(LS_KEY, _current_json, key="ls_autosave")
         st.session_state._ls_last_saved = _current_json
+        if not st.session_state.get("_ls_toast_shown"):
+            st.toast("✓ Guardado en este navegador", icon="💾")
+            st.session_state._ls_toast_shown = True
