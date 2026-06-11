@@ -975,7 +975,7 @@ st.html(f"""
   margin: 0.2rem 0 1.6rem 0; gap: 2rem; flex-wrap: wrap;
 ">
   <div>
-    <h1 style="margin: 0; line-height: 1; letter-spacing: -0.035em; font-family: 'Fraunces', Georgia, serif; font-weight: 600; color: #1F1B16;">FINANCE<br><em style="font-style: italic; color: #A77B3E; font-weight: 400;">-AI</em></h1>
+    <h1 style="margin: 0; line-height: 1; letter-spacing: -0.035em; font-family: 'Fraunces', Georgia, serif; font-weight: 600; color: #1F1B16;">FINANC<br><em style="font-style: italic; color: #A77B3E; font-weight: 400;">-AI</em></h1>
     <div style="font-family: 'Bricolage Grotesque', sans-serif; color: rgba(31,27,22,0.6); font-size: 0.93rem; margin-top: 0.55rem; max-width: 40rem; line-height: 1.5;">
       Un espacio para planificar el ahorro con cabeza fría — cascada de prioridades,
       cobertura de inflación y recomendaciones según tu perfil de inversor.
