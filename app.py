@@ -1119,7 +1119,7 @@ with tab_situacion:
     deuda_mensual_auto = float(st.session_state.get("gasto_deudas", 0.0))
 
     if sueldo > 0:
-        st.subheader("🩺 Diagnóstico de Salud Financiera")
+        st.subheader("🩺 ¿Dónde estás parado hoy?- Foto actual de tus finanzas")
         st.caption(
             f"💰 Fondo de emergencia: **{fmt(fondo_emerg_monto, moneda)}** · "
             f"💳 Cuotas de deuda detectadas: **{fmt(deuda_mensual_auto, moneda)}** "
