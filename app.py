@@ -1491,44 +1491,6 @@ with tab_plan:
         st.info("👈 Cargá al menos una meta en el tab 'Mis Metas' para ver tu plan.")
         st.stop()
 
-    with st.expander("🔭 Análisis de Escenarios (What-If)", expanded=False):
-        st.markdown("Simulá cómo cambian tus metas ante distintos contextos económicos o de ahorro.")
-        sc1, sc2, sc3 = st.columns(3)
-        delta_ahorro_pct = sc1.slider("Cambio en ahorro mensual", min_value=-50, max_value=100, value=0, step=5, format="%d%%")
-        delta_inflacion = sc2.slider("Variación de inflación anual (pp)", min_value=-30, max_value=60, value=0, step=5, format="%+d pp")
-        delta_rendimiento = sc3.slider("Variación de rendimiento anual (pp)", min_value=-10, max_value=20, value=0, step=1, format="%+d pp")
-
-        if delta_ahorro_pct != 0 or delta_inflacion != 0 or delta_rendimiento != 0:
-            ahorro_escenario = ahorro_dispuesto * (1 + delta_ahorro_pct / 100)
-            supuestos_escenario = {
-                m: {"inflacion": v["inflacion"] + delta_inflacion, "rendimiento": v["rendimiento"] + delta_rendimiento}
-                for m, v in supuestos.items()
-            }
-            ahorro_rest_esc = ahorro_escenario
-            resumen_esc = []
-            for obj in sorted(st.session_state.objetivos, key=lambda x: PRIO_ORDER.get(x.get("Prioridad"), 3)):
-                cuota_esc = calcular_cuota_meta(obj, supuestos_escenario)
-                cuota_ideal_esc = cuota_esc["cuota_ideal"]
-                cuota_ideal_ing_esc = convertir(cuota_ideal_esc, cuota_esc["moneda_meta"], moneda, tipos_cambio)
-                asignada_ing_esc = min(ahorro_rest_esc, cuota_ideal_ing_esc)
-                ahorro_rest_esc -= asignada_ing_esc
-                asignada_meta_esc = convertir(asignada_ing_esc, moneda, cuota_esc["moneda_meta"], tipos_cambio)
-                resumen_esc.append({
-                    "Meta": obj["Meta"],
-                    "Cuota ideal (escenario)": round(cuota_ideal_esc, 2),
-                    "Asignada (escenario)": round(asignada_meta_esc, 2),
-                    "Costo futuro (escenario)": round(cuota_esc["costo_futuro"], 2),
-                    "Estado": estado_meta(asignada_meta_esc, cuota_ideal_esc),
-                    "Moneda": cuota_esc["moneda_meta"],
-                })
-            df_esc = pd.DataFrame(resumen_esc)
-            st.dataframe(df_esc, use_container_width=True, hide_index=True)
-            st.caption(f"Escenario: ahorro {'+'if delta_ahorro_pct>=0 else ''}{delta_ahorro_pct}% · inflación {'+'if delta_inflacion>=0 else ''}{delta_inflacion}pp · rendimiento {'+'if delta_rendimiento>=0 else ''}{delta_rendimiento}pp")
-        else:
-            st.info("Mové alguno de los sliders para ver el impacto en tus metas.")
-
-    st.divider()
-
     OBJ_POR_FILA_PLAN = 2
     num_filas = math.ceil(len(objetivos_enriquecidos) / OBJ_POR_FILA_PLAN)
 
