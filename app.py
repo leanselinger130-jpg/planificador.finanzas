@@ -1044,7 +1044,7 @@ with tab_situacion:
                     st.number_input(c["nombre"], min_value=0.0, step=500.0, key=f"gasto_{c['id']}")
 
             st.divider()
-            st.markdown("**💰 Reserva líquida**")
+            st.markdown("**💰 ¿Cuánto tenés ahorrado hoy para emergencias?**")
             fondo_emerg_monto = st.number_input(
                 f"Fondo de emergencia actual ({moneda})",
                 min_value=0.0, step=1000.0,
