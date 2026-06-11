@@ -577,6 +577,25 @@ def calcular_indicadores_salud(
     return indicadores
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def _generar_reporte_ia(contexto: str, system_prompt: str, model: str = "gemini-2.5-flash") -> str:
+    api_key = st.secrets.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("missing_api_key")
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model=model,
+        contents=contexto,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            temperature=0.6,
+            max_output_tokens=3000,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        ),
+    )
+    return response.text
+
+
 @st.cache_data(ttl=3600)
 def fetch_cotizaciones():
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -1706,34 +1725,24 @@ with tab_plan:
             "sin jerga innecesaria."
         )
 
-        api_key = st.secrets.get("GEMINI_API_KEY", "").strip()
-        if not api_key:
+        try:
+            with st.spinner("🧠 Tu asesor de IA está analizando tu plan…"):
+                texto = _generar_reporte_ia(contexto_usuario, system_prompt)
+            st.session_state["ai_report"] = texto
+        except RuntimeError:
             st.error(
                 "⚠️ Falta configurar `GEMINI_API_KEY` en `.streamlit/secrets.toml`. "
                 "Sin esa key no puedo consultar a Gemini."
             )
-        else:
-            try:
-                client = genai.Client(api_key=api_key)
-                with st.spinner("🧠 Tu asesor de IA está analizando tu plan…"):
-                    response = client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents=contexto_usuario,
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_prompt,
-                            temperature=0.6,
-                            max_output_tokens=3000,
-                            thinking_config=types.ThinkingConfig(thinking_budget=0),
-                        ),
-                    )
+        except Exception:
+            st.error("No pude generar el reporte. Revisá tu conexión o intentá de nuevo en un minuto.")
 
-                with st.container(border=True):
-                    st.caption(
-                        "✨ *Análisis generado por Gemini 2.5 Flash en base a los datos cargados en tu sesión.*"
-                    )
-                    st.markdown(response.text)
-            except Exception as e:
-                st.error(f"No pude generar el reporte: {e}")
+    if st.session_state.get("ai_report"):
+        with st.container(border=True):
+            st.caption(
+                "✨ *Análisis generado por Gemini 2.5 Flash · respuesta cacheada 10 minutos para los mismos datos.*"
+            )
+            st.markdown(st.session_state["ai_report"])
 
     st.divider()
 
