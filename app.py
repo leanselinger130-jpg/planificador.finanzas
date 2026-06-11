@@ -1192,27 +1192,58 @@ with tab_perfil:
 
             score_tolerancia = (_t_10.get(r_10, 50) * 0.20 + _t_20.get(r_20, 50) * 0.25 + _t_30.get(r_30, 50) * 0.25 + _t_pref.get(r_pref, 50) * 0.20 + _t_cris.get(r_crisis, 50) * 0.10)
 
-            st.divider()
+st.divider()
             st.subheader("② Capacidad financiera para asumir riesgo  ·  25% del score")
-            cf1, cf2, cf3 = st.columns(3)
 
-            with cf1:
-                r_emerg = st.radio("¿Tenés fondo de emergencia?", ["No tengo", "Menos de 1 mes", "1 a 3 meses", "3 a 6 meses", "Más de 6 meses"], key="r_emerg")
-                r_estab = st.radio("Estabilidad laboral", ["Inestable / desempleo reciente", "Freelance / variable", "Relación de dependencia estable", "Múltiples fuentes de ingresos"], key="r_estab")
-            with cf2:
-                r_deuda = st.radio("Nivel de endeudamiento", ["Más del 50% de ingresos en deudas", "Entre 30% y 50%", "Entre 10% y 30%", "Menos del 10% o sin deudas"], key="r_deuda")
-                r_ahorro_pct = st.radio("¿Porcentaje de tu ingreso ahorrás?", ["No ahorro / gasto más de lo que gano", "Menos del 5%", "Entre 5% y 15%", "Entre 15% y 30%", "Más del 30%"], key="r_ahorro_pct")
-            with cf3:
-                r_depend = st.radio("Dependientes económicos", ["3 o más", "2", "1", "Ninguno"], key="r_depend")
+            _sueldo_real    = float(st.session_state.get("sueldo_valor", 0.0))
+            _gastos_real    = float(st.session_state.get("gastos_valor", 0.0))
+            _fondo_real     = float(st.session_state.get("fondo_emerg_valor", 0.0))
+            _deuda_real     = float(st.session_state.get("deuda_mensual_valor", 0.0))
+            _ahorro_real    = float(st.session_state.get("ahorro_dispuesto_valor", 0.0))
 
-            _c_emerg  = {"No tengo": 0, "Menos de 1 mes": 15, "1 a 3 meses": 40, "3 a 6 meses": 75, "Más de 6 meses": 100}
-            _c_estab  = {"Inestable / desempleo reciente": 0, "Freelance / variable": 35, "Relación de dependencia estable": 70, "Múltiples fuentes de ingresos": 100}
-            _c_deuda  = {"Más del 50% de ingresos en deudas": 0, "Entre 30% y 50%": 25, "Entre 10% y 30%": 60, "Menos del 10% o sin deudas": 100}
-            _c_aho    = {"No ahorro / gasto más de lo que gano": 0, "Menos del 5%": 20, "Entre 5% y 15%": 50, "Entre 15% y 30%": 80, "Más del 30%": 100}
-            _c_dep    = {"3 o más": 10, "2": 40, "1": 65, "Ninguno": 100}
+            # Fondo de emergencia: meses de gastos cubiertos
+            _gastos_fe = _gastos_real if _gastos_real > 0 else 1
+            _meses_fe  = _fondo_real / _gastos_fe
+            if _meses_fe >= 6:   _sc_emerg = 100
+            elif _meses_fe >= 3: _sc_emerg = 75
+            elif _meses_fe >= 1: _sc_emerg = 40
+            elif _meses_fe > 0:  _sc_emerg = 15
+            else:                _sc_emerg = 0
 
-            score_capacidad = (_c_emerg.get(r_emerg, 50) * 0.30 + _c_estab.get(r_estab, 50) * 0.25 + _c_deuda.get(r_deuda, 50) * 0.25 + _c_aho.get(r_ahorro_pct, 50) * 0.10 + _c_dep.get(r_depend, 50) * 0.10)
+            # Ratio deuda / ingreso
+            _ratio_deuda = _deuda_real / _sueldo_real if _sueldo_real > 0 else 0
+            if _ratio_deuda <= 0.10:   _sc_deuda = 100
+            elif _ratio_deuda <= 0.30: _sc_deuda = 60
+            elif _ratio_deuda <= 0.50: _sc_deuda = 25
+            else:                      _sc_deuda = 0
 
+            # Ratio ahorro / ingreso
+            _ratio_aho = _ahorro_real / _sueldo_real if _sueldo_real > 0 else 0
+            if _ratio_aho >= 0.30:   _sc_aho = 100
+            elif _ratio_aho >= 0.15: _sc_aho = 80
+            elif _ratio_aho >= 0.05: _sc_aho = 50
+            elif _ratio_aho > 0:     _sc_aho = 20
+            else:                    _sc_aho = 0
+
+            score_capacidad = _sc_emerg * 0.40 + _sc_deuda * 0.35 + _sc_aho * 0.25
+
+            # Estabilidad laboral: única pregunta que no está en los datos
+            r_estab = st.radio(
+                "¿Cómo describís tu situación laboral?",
+                ["Inestable o desempleo reciente", "Freelance / ingresos variables", "Relación de dependencia estable", "Múltiples fuentes de ingresos"],
+                key="r_estab"
+            )
+            _c_estab = {"Inestable o desempleo reciente": 0, "Freelance / ingresos variables": 35, "Relación de dependencia estable": 70, "Múltiples fuentes de ingresos": 100}
+            score_capacidad = score_capacidad * 0.75 + _c_estab.get(r_estab, 50) * 0.25
+
+            if _sueldo_real > 0:
+                st.caption(
+                    f"Calculado desde tus datos: fondo {_meses_fe:.1f} meses de gastos · "
+                    f"deuda {_ratio_deuda:.0%} del ingreso · ahorro {_ratio_aho:.0%} del ingreso."
+                )
+            else:
+                st.caption("⚠️ Completá primero tu situación financiera en la primer solapa para que este score sea preciso.")
+          
             st.divider()
             st.subheader("③ Horizonte temporal  ·  20% del score")
             r_horizonte = st.select_slider("¿En cuánto tiempo necesitás el capital?", options=["Menos de 1 año", "1 a 3 años", "3 a 5 años", "5 a 10 años", "Más de 10 años"], value="3 a 5 años", key="r_horizonte")
