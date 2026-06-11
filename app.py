@@ -1546,7 +1546,20 @@ with tab_metas:
     if st.session_state.objetivos:
         tiene_fondo = any(o.get("Categoría") == "Fondo de Emergencia" for o in st.session_state.objetivos)
         if not tiene_fondo:
-            st.warning("⚠️ **Sin fondo de emergencia en tu ruta.** Considerá agregar una meta de categoría **Fondo de Emergencia** con prioridad Alta.")
+            st.html("""
+            <div style="background:rgba(168,84,50,0.08); border-left:3px solid var(--warning);
+                        border-radius:0 3px 3px 0; padding:0.95rem 1.2rem; margin:0.4rem 0 1.2rem 0;
+                        font-family:'Bricolage Grotesque',sans-serif;">
+              <div style="font-family:'Fraunces',serif; font-weight:600; color:var(--warning);
+                          margin-bottom:0.25rem; font-size:1.02rem;">
+                Sin fondo de emergencia en tu ruta
+              </div>
+              <div style="font-size:0.9rem; color:var(--ink); line-height:1.55;">
+                En Argentina, con inflación volátil, el fondo de emergencia es la <em>primera</em> meta.
+                Cargá una con categoría <strong>Fondo de Emergencia</strong> y prioridad <strong>Alta</strong>.
+              </div>
+            </div>
+            """)
 
     col_form, col_lista = cols_or_stack([1, 2.5], gap="large")
 
@@ -1720,14 +1733,28 @@ with tab_plan:
                         unsafe_allow_html=True,
                     )
 
-                    fig = go.Figure(go.Indicator(
-                        mode="gauge+number",
-                        value=o["Ya Ahorrado"],
-                        gauge={'axis': {'range': [None, o["Costo Total"]]},
-                               'bar': {'color': color}},
-                    ))
-                    fig.update_layout(height=140, margin=dict(t=10, b=0, l=10, r=10))
-                    st.plotly_chart(fig, use_container_width=True, key=f"gauge_{idx}")
+                    _costo_total = float(o["Costo Total"])
+                    _ahorrado = float(o["Ya Ahorrado"])
+                    _pct = min(100.0, (_ahorrado / _costo_total * 100) if _costo_total > 0 else 0.0)
+                    st.html(f"""
+                    <div style="margin: 0.6rem 0 0.9rem 0;">
+                      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.35rem;
+                                  font-family:'Bricolage Grotesque',sans-serif; font-size:0.78rem;">
+                        <span style="color:var(--muted); text-transform:uppercase; letter-spacing:0.16em;">Progreso</span>
+                        <span style="font-family:'Fraunces',serif; font-weight:600; color:{color}; font-size:1.05rem;
+                                     font-variant-numeric: tabular-nums;">{_pct:.0f}%</span>
+                      </div>
+                      <div style="background:var(--whisper); height:6px; border-radius:3px; overflow:hidden;">
+                        <div style="background:{color}; width:{_pct}%; height:100%; transition:width 0.4s;"></div>
+                      </div>
+                      <div style="display:flex; justify-content:space-between; margin-top:0.3rem;
+                                  font-family:'Bricolage Grotesque',sans-serif; font-size:0.78rem; color:var(--muted);
+                                  font-variant-numeric: tabular-nums;">
+                        <span>{fmt(_ahorrado, m_meta)}</span>
+                        <span>{fmt(_costo_total, m_meta)}</span>
+                      </div>
+                    </div>
+                    """)
 
                     m1, m2 = st.columns(2)
                     m1.metric("Cuota Ideal", fmt(o['cuota_ideal_meta'], m_meta))
