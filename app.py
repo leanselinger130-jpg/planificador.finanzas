@@ -1041,6 +1041,42 @@ def render_progreso():
     )
 
 render_progreso()
+
+# ── Banner de cotizaciones (contexto argentino) ─────────────────────────
+_cot = fetch_cotizaciones()
+if isinstance(_cot, dict):
+    _usd = _cot.get("USD") or {}
+    _eur = _cot.get("EUR")
+    _ts = (_cot.get("actualizado") or "")[:16].replace("T", " ")
+    def _chip(label, val):
+        if not val:
+            return ""
+        return (
+            f'<span style="display:inline-flex; gap:0.35rem; align-items:baseline;">'
+            f'<span style="font-family:\'Fraunces\',serif; color:var(--accent); font-weight:600;">{label}</span>'
+            f'<span style="font-variant-numeric: tabular-nums;">${val:,.0f}</span>'
+            f'</span>'
+        )
+    _chips = " &nbsp;·&nbsp; ".join(filter(None, [
+        _chip("Blue",   _usd.get("blue")),
+        _chip("MEP",    _usd.get("bolsa")),
+        _chip("CCL",    _usd.get("contadoconliqui")),
+        _chip("Oficial",_usd.get("oficial")),
+        _chip("EUR",    _eur),
+    ]))
+    st.html(f"""
+    <div style="display:flex; gap:1.2rem; flex-wrap:wrap; align-items:baseline;
+                background:rgba(255,255,255,0.45); border:1px solid var(--rule);
+                border-left:3px solid var(--accent); border-radius:3px;
+                padding:0.65rem 1.1rem; margin:0.4rem 0 1.2rem 0;
+                font-family:'Bricolage Grotesque',sans-serif; font-size:0.86rem; color:var(--ink);">
+      <span style="text-transform:uppercase; letter-spacing:0.2em; color:var(--muted); font-size:0.66rem;">
+        Cotizaciones {('· ' + _ts) if _ts else ''}
+      </span>
+      <span style="display:flex; gap:1.2rem; flex-wrap:wrap;">{_chips}</span>
+    </div>
+    """)
+
 st.divider()
 
 # ── Declaración de tabs ────────────────────────────────────────────────
