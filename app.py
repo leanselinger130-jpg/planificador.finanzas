@@ -390,7 +390,156 @@ def estado_meta(cuota_asignada, cuota_ideal):
 
 
 def fmt(monto, codigo):
-    return f"{codigo} {monto:,.2f}"
+    # Formato argentino: ARS 1.234.567,89 (puntos para miles, coma para decimal)
+    s = f"{monto:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{codigo} {s}"
+
+
+def _ar_format_pesos(value: float) -> str:
+    """1234567.89 → '1.234.567,00' (centavos fijos en 00; tipeás pesos enteros)."""
+    pesos_int = int(value)
+    return f"{pesos_int:,}".replace(",", ".") + ",00"
+
+
+def _parse_money_text(text: str) -> float:
+    """'1.234.567,00' → 1234567.0  ·  '$10000 ARS' → 10000.0  ·  '' → 0.0"""
+    if not text:
+        return 0.0
+    comma_idx = text.find(",")
+    pesos_part = text[:comma_idx] if comma_idx >= 0 else text
+    digits = "".join(c for c in pesos_part if c.isdigit())
+    return float(int(digits)) if digits else 0.0
+
+
+def money_input(label: str, key_canonical: str, help: str = None, max_value: float = None) -> float:
+    """
+    Input de plata con formato AR en tiempo real (vía install_money_format_js).
+
+    Mantiene dos keys en session_state:
+    - key_canonical: float canónico (ej. sueldo_valor) — el que serializa a localStorage
+    - "_<key_canonical>__text": string formateado del widget (ej. "1.000.000,00")
+    - "_<key_canonical>__shadow": último canónico observado, para detectar updates externos
+    """
+    text_key = f"_{key_canonical}__text"
+    shadow_key = f"_{key_canonical}__shadow"
+
+    canonical = float(st.session_state.get(key_canonical, 0.0))
+    shadow = float(st.session_state.get(shadow_key, 0.0))
+
+    if text_key not in st.session_state:
+        # Primera renderización: inicializamos texto desde el canónico
+        st.session_state[text_key] = _ar_format_pesos(canonical) if canonical > 0 else ""
+        st.session_state[shadow_key] = canonical
+    elif canonical != shadow:
+        # El canónico fue updateado externamente (localStorage load, upload de config) →
+        # re-sincronizamos el texto desde el canónico
+        st.session_state[text_key] = _ar_format_pesos(canonical) if canonical > 0 else ""
+        st.session_state[shadow_key] = canonical
+
+    raw = st.text_input(label, key=text_key, help=help, placeholder="0,00")
+
+    new_value = _parse_money_text(raw)
+    if max_value is not None and new_value > max_value:
+        new_value = float(max_value)
+
+    if st.session_state.get(key_canonical) != new_value:
+        st.session_state[key_canonical] = new_value
+    st.session_state[shadow_key] = new_value
+
+    return new_value
+
+
+def install_money_format_js():
+    """
+    Inyecta JS que escucha keystrokes en inputs con placeholder='0,00' y los
+    formatea como pesos argentinos en tiempo real. Llamar una vez por script run.
+
+    Hack: el iframe de components.v1.html con srcdoc es same-origin con el parent,
+    así que `window.parent.document` está accesible y podemos modificar los inputs
+    de Streamlit directamente. Usa el setter nativo de HTMLInputElement.prototype.value
+    para que React/Streamlit registre el cambio.
+    """
+    from streamlit.components.v1 import html
+    html(r"""
+    <script>
+    (function() {
+      const parentWin = window.parent;
+      const parentDoc = parentWin.document;
+
+      // Desconectar observer previo (Streamlit re-rendera el iframe en cada run)
+      if (parentWin.__moneyObserver) {
+        try { parentWin.__moneyObserver.disconnect(); } catch(e) {}
+      }
+
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        parentWin.HTMLInputElement.prototype, 'value'
+      ).set;
+
+      function setValue(input, value) {
+        nativeSetter.call(input, value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      function formatPesos(pesosInt) {
+        return pesosInt.toLocaleString('es-AR') + ',00';
+      }
+
+      function attach(input) {
+        if (input.dataset.moneyFormatted === '1') return;
+        input.dataset.moneyFormatted = '1';
+
+        function refresh(triggeredByUser) {
+          const val = input.value;
+          const commaIdx = val.indexOf(',');
+          const pesosPart = commaIdx >= 0 ? val.substring(0, commaIdx) : val;
+          const digits = pesosPart.replace(/\D/g, '');
+
+          if (!digits) {
+            if (val !== '' && triggeredByUser) {
+              setValue(input, '');
+            }
+            return;
+          }
+
+          const pesos = parseInt(digits, 10);
+          if (isNaN(pesos)) return;
+          const formatted = formatPesos(pesos);
+          if (val !== formatted) {
+            setValue(input, formatted);
+            // Cursor justo antes de la coma (los centavos quedan locked en ,00)
+            const commaPos = formatted.indexOf(',');
+            const pos = commaPos > 0 ? commaPos : formatted.length;
+            input.setSelectionRange(pos, pos);
+          }
+        }
+
+        input.addEventListener('input', () => refresh(true));
+        input.addEventListener('focus', () => {
+          // Si el input está vacío, no hacer nada. Si tiene valor, cursor antes de coma.
+          if (input.value) {
+            const commaPos = input.value.indexOf(',');
+            if (commaPos > 0) {
+              setTimeout(() => input.setSelectionRange(commaPos, commaPos), 0);
+            }
+          }
+        });
+        // Format inicial (cuando se monta el input con valor pre-existente)
+        refresh(false);
+      }
+
+      function scan() {
+        const inputs = parentDoc.querySelectorAll('input[placeholder="0,00"]');
+        inputs.forEach(attach);
+      }
+
+      const observer = new MutationObserver(scan);
+      observer.observe(parentDoc.body, { childList: true, subtree: true });
+      parentWin.__moneyObserver = observer;
+
+      scan();
+    })();
+    </script>
+    """, height=0)
 
 
 DTYPES_OBJETIVOS = {
@@ -674,6 +823,8 @@ def build_excel(rows, perfil_data: tuple = ()):
 
 
 st.set_page_config(layout="wide", page_title="Cuaderno de Finanzas", page_icon="◐")
+
+install_money_format_js()
 
 st.html("""
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1152,10 +1303,9 @@ with tab_situacion:
         with col_moneda:
             moneda = st.selectbox("Moneda del ingreso", MONEDAS, index=MONEDAS.index(st.session_state.get("moneda_ingreso", "ARS")), key="moneda_ingreso")
         with col_sueldo:
-            sueldo = st.number_input(
+            sueldo = money_input(
                 "Sueldo Neto Mensual",
-                min_value=0.0, step=1000.0,
-                key="sueldo_valor",
+                key_canonical="sueldo_valor",
                 help=f"En {moneda}. Se guarda automáticamente en este navegador.",
             )
 
@@ -1175,10 +1325,9 @@ with tab_situacion:
 
             st.divider()
             st.markdown("**💰 ¿Cuánto tenés ahorrado hoy para emergencias?**")
-            fondo_emerg_monto = st.number_input(
+            fondo_emerg_monto = money_input(
                 "Fondo de emergencia actual",
-                min_value=0.0, step=1000.0,
-                key="fondo_emerg_valor",
+                key_canonical="fondo_emerg_valor",
                 help=f"En {moneda}. Capital líquido para emergencias — NO incluyas inversiones que tardan en rescatarse.",
             )
 
@@ -1598,13 +1747,16 @@ with tab_metas:
             categoria = st.selectbox("Categoría", CATEGORIAS)
             col_m, col_costo = st.columns([1, 2])
             moneda_meta = col_m.selectbox("Moneda", MONEDAS, index=MONEDAS.index(moneda))
-            costo_total = col_costo.number_input(
-                "Costo Total (hoy)", min_value=1.0, step=1000.0,
-                help="Valor de hoy en la moneda elegida. La inflación se ajusta automáticamente.",
-            )
-            ahorro_previo = st.number_input(
+            with col_costo:
+                costo_total = money_input(
+                    "Costo Total (hoy)",
+                    key_canonical="_costo_total_form",
+                    help="Valor de hoy en la moneda elegida. La inflación se ajusta automáticamente.",
+                )
+            ahorro_previo = money_input(
                 "Ahorrado hoy (misma moneda)",
-                min_value=0.0, max_value=float(costo_total), step=500.0,
+                key_canonical="_ahorro_previo_form",
+                max_value=costo_total if costo_total > 0 else None,
             )
             cp1, cp2 = st.columns([2, 1])
             plazo_num = cp1.number_input("Plazo deseado", min_value=1, value=12)
