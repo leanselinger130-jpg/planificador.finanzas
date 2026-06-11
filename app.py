@@ -1429,28 +1429,46 @@ with tab_perfil:
         _score_color = color_perfil(risk_score)
         _bar_pct = int(risk_score)
 
-        st.markdown(f"""
-        <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:16px;padding:24px 28px;margin-bottom:16px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        st.html(f"""
+        <div style="
+          background: linear-gradient(135deg, var(--paper-deep) 0%, rgba(167,123,62,0.10) 100%);
+          border: 1px solid var(--rule);
+          border-left: 3px solid {_score_color};
+          border-radius: 4px;
+          padding: 1.6rem 1.8rem;
+          margin: 0.8rem 0 1.4rem 0;
+        ">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:2rem; flex-wrap:wrap;">
             <div>
-              <div style="font-size:13px;color:#aaa;letter-spacing:1px;text-transform:uppercase;">Risk Score</div>
-              <div style="font-size:52px;font-weight:900;color:{_score_color};line-height:1.1;">{risk_score}</div>
-              <div style="font-size:20px;color:#fff;font-weight:600;">{perfil_emoji_show} {perfil_label_show}</div>
+              <div style="font-family:'Bricolage Grotesque',sans-serif; font-size:0.68rem;
+                          text-transform:uppercase; letter-spacing:0.22em; color:var(--muted);">Risk Score</div>
+              <div style="font-family:'Fraunces',serif; font-size:4rem; font-weight:600; color:{_score_color};
+                          line-height:1; letter-spacing:-0.04em; margin-top:0.3rem;">{risk_score}</div>
+              <div style="font-family:'Fraunces',serif; font-style:italic; font-size:1.25rem;
+                          color:var(--ink); margin-top:0.2rem;">{perfil_label_show}</div>
             </div>
-            <div style="flex:1;min-width:220px;">
-              <div style="background:#333;border-radius:8px;height:12px;margin-bottom:16px;">
-                <div style="background:{_score_color};width:{_bar_pct}%;height:100%;border-radius:8px;transition:width 0.4s;"></div>
+            <div style="flex:1; min-width:260px;">
+              <div style="background:var(--whisper); height:4px; border-radius:2px; overflow:hidden; margin-bottom:1.2rem;">
+                <div style="background:{_score_color}; width:{_bar_pct}%; height:100%; transition:width 0.4s;"></div>
               </div>
-              <table style="width:100%;color:#ddd;font-size:14px;border-collapse:collapse;">
-                <tr><td style="padding:4px 0;color:#aaa;">🎯 Objetivo</td><td style="text-align:right;color:#fff;">{objetivo_financiero}</td></tr>
-                <tr><td style="padding:4px 0;color:#aaa;">⏳ Horizonte</td><td style="text-align:right;color:#fff;">{horizonte_perfil}</td></tr>
-                <tr><td style="padding:4px 0;color:#aaa;">📚 Conocimiento</td><td style="text-align:right;color:#fff;">{int(conocimiento_score)}/100</td></tr>
-              </table>
+              <div style="font-family:'Bricolage Grotesque',sans-serif; font-size:0.88rem; color:var(--ink);">
+                <div style="display:flex; justify-content:space-between; border-bottom:1px dotted var(--rule); padding-bottom:0.35rem;">
+                  <span style="color:var(--muted); text-transform:uppercase; letter-spacing:0.14em; font-size:0.72rem;">Objetivo</span>
+                  <span>{objetivo_financiero}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; border-bottom:1px dotted var(--rule); padding:0.35rem 0;">
+                  <span style="color:var(--muted); text-transform:uppercase; letter-spacing:0.14em; font-size:0.72rem;">Horizonte</span>
+                  <span>{horizonte_perfil}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding-top:0.35rem;">
+                  <span style="color:var(--muted); text-transform:uppercase; letter-spacing:0.14em; font-size:0.72rem;">Conocimiento</span>
+                  <span>{int(conocimiento_score)} / 100</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        """, unsafe_allow_html=True)
- 
+        """)
     else:
         st.info("☝️ Completá y calculá tu Risk Score arriba para ver tu perfil y recomendación.")
 
