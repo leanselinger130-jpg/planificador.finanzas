@@ -787,7 +787,7 @@ for _k, _v in [
 
 def serializar_config():
     payload = {
-        "version": 2,
+        "version": 3,
         "objetivos": st.session_state.objetivos,
         "supuestos": st.session_state.supuestos,
         "tc_USD": float(st.session_state.tc_USD),
@@ -795,6 +795,12 @@ def serializar_config():
         "gastos_por_categoria": {
             c["id"]: float(st.session_state.get(f"gasto_{c['id']}", 0.0))
             for c in CATEGORIAS_GASTOS
+        },
+        "situacion": {
+            "moneda_ingreso": st.session_state.get("moneda_ingreso", "ARS"),
+            "sueldo_valor": float(st.session_state.get("sueldo_valor", 0.0)),
+            "fondo_emerg_valor": float(st.session_state.get("fondo_emerg_valor", 0.0)),
+            "ahorro_dispuesto_valor": float(st.session_state.get("ahorro_dispuesto_valor", 0.0)),
         },
     }
     return json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
@@ -823,6 +829,16 @@ def _aplicar_config(config: dict) -> int:
             if c["id"] in config["gastos_por_categoria"]:
                 try:
                     st.session_state[f"gasto_{c['id']}"] = float(config["gastos_por_categoria"][c["id"]])
+                except (TypeError, ValueError):
+                    pass
+    if isinstance(config.get("situacion"), dict):
+        sit = config["situacion"]
+        if sit.get("moneda_ingreso") in MONEDAS:
+            st.session_state.moneda_ingreso = sit["moneda_ingreso"]
+        for k in ("sueldo_valor", "fondo_emerg_valor", "ahorro_dispuesto_valor"):
+            if k in sit:
+                try:
+                    st.session_state[k] = float(sit[k])
                 except (TypeError, ValueError):
                     pass
     return len(st.session_state.objetivos)
@@ -1025,9 +1041,14 @@ with tab_situacion:
     with col_inputs:
         col_moneda, col_sueldo = st.columns([1, 2])
         with col_moneda:
-            moneda = st.selectbox("Moneda del ingreso", MONEDAS, index=0, key="moneda_ingreso")
+            moneda = st.selectbox("Moneda del ingreso", MONEDAS, index=MONEDAS.index(st.session_state.get("moneda_ingreso", "ARS")), key="moneda_ingreso")
         with col_sueldo:
-            sueldo = st.number_input(f"Sueldo Neto Mensual ({moneda})", min_value=0.0, step=1000.0)
+            sueldo = st.number_input(
+                "Sueldo Neto Mensual",
+                min_value=0.0, step=1000.0,
+                key="sueldo_valor",
+                help=f"En {moneda}. Se guarda automáticamente en este navegador.",
+            )
 
         with st.expander("📋 Gastos y reservas mensuales", expanded=True):
             st.caption(f"Cargá tus gastos en {moneda}. La regla 50/30/20 sugiere ≤ 50% en Necesidades, ≤ 30% en Deseos y ≥ 20% al Ahorro.")
@@ -1046,9 +1067,10 @@ with tab_situacion:
             st.divider()
             st.markdown("**💰 ¿Cuánto tenés ahorrado hoy para emergencias?**")
             fondo_emerg_monto = st.number_input(
-                f"Fondo de emergencia actual ({moneda})",
+                "Fondo de emergencia actual",
                 min_value=0.0, step=1000.0,
-                help="Capital líquido disponible para emergencias. NO incluyas inversiones que tardan en rescatarse.",
+                key="fondo_emerg_valor",
+                help=f"En {moneda}. Capital líquido para emergencias — NO incluyas inversiones que tardan en rescatarse.",
             )
 
         total_necesidades = sum(float(st.session_state.get(f"gasto_{c['id']}", 0.0)) for c in CATEGORIAS_GASTOS if c["tipo"] == "Necesidad")
@@ -1095,9 +1117,14 @@ with tab_situacion:
         if sueldo > 0:
             if disponible_bruto > 0:
                 st.info(f"Excedente disponible: **{fmt(disponible_bruto, moneda)}**")
+                _ad_prev = float(st.session_state.get("ahorro_dispuesto_valor", 0.0))
+                _ad_max = float(disponible_bruto)
+                if _ad_prev <= 0 or _ad_prev > _ad_max:
+                    st.session_state["ahorro_dispuesto_valor"] = _ad_max * DEFAULT_AHORRO_RATIO
                 ahorro_dispuesto = st.slider(
                     "¿Cuánto vas a destinar al ahorro/inversión?",
-                    0.0, disponible_bruto, value=disponible_bruto * DEFAULT_AHORRO_RATIO, step=500.0,
+                    min_value=0.0, max_value=_ad_max, step=500.0,
+                    key="ahorro_dispuesto_valor",
                 )
             else:
                 st.error("🚨 Sin margen de ahorro.")
@@ -1155,11 +1182,9 @@ with tab_situacion:
             )
             col.caption(ind["descripcion"])
 
-    # Guardamos en session_state al final del tab
-    st.session_state.sueldo_valor = sueldo
+    # sueldo_valor, fondo_emerg_valor y ahorro_dispuesto_valor ya viven como keys de widget.
+    # Solo guardamos los derivados que no son inputs directos.
     st.session_state.gastos_valor = total_gastos
-    st.session_state.ahorro_dispuesto_valor = ahorro_dispuesto
-    st.session_state.fondo_emerg_valor = fondo_emerg_monto if sueldo > 0 else 0.0
     st.session_state.deuda_mensual_valor = deuda_mensual_auto if sueldo > 0 else 0.0
 
 
@@ -1411,8 +1436,14 @@ with tab_metas:
             categoria = st.selectbox("Categoría", CATEGORIAS)
             col_m, col_costo = st.columns([1, 2])
             moneda_meta = col_m.selectbox("Moneda", MONEDAS, index=MONEDAS.index(moneda))
-            costo_total = col_costo.number_input("Costo Total (hoy)", min_value=0.0)
-            ahorro_previo = st.number_input("Ahorrado hoy (misma moneda)", min_value=0.0)
+            costo_total = col_costo.number_input(
+                "Costo Total (hoy)", min_value=1.0, step=1000.0,
+                help="Valor de hoy en la moneda elegida. La inflación se ajusta automáticamente.",
+            )
+            ahorro_previo = st.number_input(
+                "Ahorrado hoy (misma moneda)",
+                min_value=0.0, max_value=float(costo_total), step=500.0,
+            )
             cp1, cp2 = st.columns([2, 1])
             plazo_num = cp1.number_input("Plazo deseado", min_value=1, value=12)
             plazo_unit = cp2.selectbox("Unidad", ["Meses", "Años"])
