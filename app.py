@@ -1284,20 +1284,7 @@ with tab_perfil:
           </div>
         </div>
         """, unsafe_allow_html=True)
-
-        _horizonte_meses_map = {
-            "Menos de 1 año": 6, "1 a 3 años": 24, "3 a 5 años": 48,
-            "5 a 10 años": 84, "Más de 10 años": 144,
-        }
-        horizonte_meses_perfil = _horizonte_meses_map.get(horizonte_perfil, 48)
-        rec_general = recomendar_instrumento_avanzado(
-            risk_score, horizonte_meses_perfil, objetivo_financiero, conocimiento_score
-        )
-
-        with st.container(border=True):
-            st.markdown(f"### {rec_general['emoji']} Instrumento principal recomendado: **{rec_general['tipo']}**")
-            st.markdown(rec_general["descripcion"])
-            st.markdown(f"**Alternativas:** {' · '.join(rec_general['alternativas'])}")
+ 
     else:
         st.info("☝️ Completá y calculá tu Risk Score arriba para ver tu perfil y recomendación.")
 
