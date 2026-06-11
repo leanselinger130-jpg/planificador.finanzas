@@ -1155,30 +1155,6 @@ with tab_situacion:
             )
             col.caption(ind["descripcion"])
 
-        st.divider()
-        st.subheader("🤖 Análisis Automático")
-        tips = []
-        ratio_n = total_necesidades / sueldo
-        ratio_d = total_deseos / sueldo
-        ratio_ahorro = ahorro_dispuesto / sueldo
-
-        if disponible_bruto <= 0:
-            tips.append(("error", "🚨 Déficit mensual detectado: tus gastos superan tus ingresos."))
-        if ratio_n > 0.50:
-            tips.append(("warning", f"⚠️ Necesidades en {ratio_n:.0%} del ingreso (regla 50/30/20: máximo 50%)."))
-        if ratio_d > 0.30:
-            tips.append(("warning", f"⚠️ Deseos en {ratio_d:.0%} del ingreso (máximo recomendado: 30%)."))
-        if ratio_ahorro < RATIO_AHORRO_BAJO:
-            tips.append(("info", "📉 Estás ahorrando menos del 10% de tu ingreso. Intentá llevar ese ratio al 20%."))
-        if ratio_ahorro >= RATIO_AHORRO_OBJETIVO:
-            tips.append(("success", "✅ Excelente tasa de ahorro. Estás por encima del benchmark del 20% recomendado."))
-
-        if tips:
-            for tipo, msg in tips:
-                getattr(st, tipo)(msg)
-        else:
-            st.success("Tu perfil financiero está equilibrado dentro de la regla 50/30/20.")
-
     # Guardamos en session_state al final del tab
     st.session_state.sueldo_valor = sueldo
     st.session_state.gastos_valor = total_gastos
