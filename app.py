@@ -924,9 +924,21 @@ if _ls_saved and _ls_saved != st.session_state.get("_ls_last_loaded"):
     except (json.JSONDecodeError, TypeError, ValueError):
         pass
 
+def cols_or_stack(weights, gap="medium"):
+    """Devuelve st.columns si no estamos en modo compacto, sino contenedores apilados."""
+    if st.session_state.get("modo_compacto", False):
+        return [st.container() for _ in range(len(weights))]
+    return st.columns(weights, gap=gap)
+
+
 # ── Sidebar ──────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("⚙️ Configuración")
+    st.toggle(
+        "📱 Modo compacto",
+        key="modo_compacto",
+        help="Apila las columnas verticalmente. Activalo si estás en mobile.",
+    )
     
     with st.expander("Supuestos macro", expanded=False):
         st.caption("Inflación y rendimiento nominales anuales.")
@@ -1025,19 +1037,33 @@ st.html(f"""
 
 # ── Indicador de progreso ──────────────────────────────────────────────
 def render_progreso():
-    pasos = {
-        "Situación": st.session_state.get("sueldo_valor", 0) > 0,
-        "Metas":     len(st.session_state.objetivos) > 0,
-        "Perfil":    st.session_state.perfil_completo,
-    }
-    pasos["Plan"] = all(pasos.values())
-    items = "    ".join(
-        f"{'🟢' if v else '⚪'} {k}" for k, v in pasos.items()
-    )
-    st.markdown(
-        f"<div style='text-align:center; padding:8px; color:#666; font-size:14px;'>"
-        f"{items}</div>",
-        unsafe_allow_html=True,
+    pasos = [
+        ("Situación", st.session_state.get("sueldo_valor", 0) > 0),
+        ("Metas",     len(st.session_state.objetivos) > 0),
+        ("Perfil",    st.session_state.perfil_completo),
+    ]
+    pasos.append(("Plan", all(v for _, v in pasos)))
+    chips = []
+    for i, (label, done) in enumerate(pasos):
+        fg = "var(--paper)" if done else "var(--muted)"
+        bg = "var(--ink)" if done else "transparent"
+        border = "var(--ink)" if done else "var(--rule)"
+        marker = "✓" if done else f"{i + 1}"
+        chips.append(
+            f'<span style="display:inline-flex; align-items:center; gap:0.5rem;'
+            f' padding:0.32rem 0.85rem; border:1px solid {border};'
+            f' background:{bg}; color:{fg}; border-radius:999px;'
+            f' font-family:\'Bricolage Grotesque\',sans-serif; font-size:0.72rem;'
+            f' text-transform:uppercase; letter-spacing:0.18em; font-weight:500;">'
+            f'<span style="opacity:0.7;">{marker}</span>{label}</span>'
+        )
+        if i < len(pasos) - 1:
+            chips.append('<span style="color:var(--rule);">———</span>')
+    st.html(
+        '<div style="display:flex; gap:0.5rem; align-items:center; justify-content:center;'
+        ' flex-wrap:wrap; margin:0.2rem 0 1.4rem 0;">'
+        + "".join(chips)
+        + '</div>'
     )
 
 render_progreso()
@@ -1079,6 +1105,28 @@ if isinstance(_cot, dict):
 
 st.divider()
 
+# ── Onboarding banner (solo visible si está todo vacío) ────────────────
+if st.session_state.get("sueldo_valor", 0) == 0 and not st.session_state.objetivos:
+    st.html("""
+    <div style="
+      background: rgba(167,123,62,0.06);
+      border: 1px dashed var(--accent);
+      border-radius: 4px;
+      padding: 1.4rem 1.8rem;
+      margin-bottom: 1.4rem;
+    ">
+      <div style="font-family:'Fraunces',serif; font-size:1.35rem; font-weight:500; color:var(--ink); letter-spacing:-0.01em;">
+        Bienvenido/a a tu cuaderno.
+      </div>
+      <div style="font-family:'Bricolage Grotesque',sans-serif; color:var(--muted);
+                  margin-top:0.5rem; font-size:0.95rem; line-height:1.6; max-width:42rem;">
+        En cuatro pasos vas a tener un plan de ahorro personalizado.
+        Empezá por <strong style="color:var(--accent);">Mi Situación</strong> —
+        cargá tu sueldo y gastos mensuales. Lo demás se va desbloqueando solo.
+      </div>
+    </div>
+    """)
+
 # ── Declaración de tabs ────────────────────────────────────────────────
 tab_situacion, tab_metas, tab_perfil, tab_plan = st.tabs([
     "📊 Mi Situación",
@@ -1091,7 +1139,7 @@ tab_situacion, tab_metas, tab_perfil, tab_plan = st.tabs([
 # ── TAB 1: SITUACION ────────────────────────────────────────────────────
 with tab_situacion:
     st.header("📊 Mi Situación Financiera")
-    col_inputs, col_visual = st.columns([1.2, 1], gap="large")
+    col_inputs, col_visual = cols_or_stack([1.2, 1], gap="large")
 
     with col_inputs:
         col_moneda, col_sueldo = st.columns([1, 2])
@@ -1500,7 +1548,7 @@ with tab_metas:
         if not tiene_fondo:
             st.warning("⚠️ **Sin fondo de emergencia en tu ruta.** Considerá agregar una meta de categoría **Fondo de Emergencia** con prioridad Alta.")
 
-    col_form, col_lista = st.columns([1, 2.5])
+    col_form, col_lista = cols_or_stack([1, 2.5], gap="large")
 
     with col_form:
         with st.form("nuevo_objetivo", clear_on_submit=True):
@@ -1644,11 +1692,11 @@ with tab_plan:
         st.info("👈 Cargá al menos una meta en el tab 'Mis Metas' para ver tu plan.")
         st.stop()
 
-    OBJ_POR_FILA_PLAN = 2
+    OBJ_POR_FILA_PLAN = 1 if st.session_state.get("modo_compacto", False) else 2
     num_filas = math.ceil(len(objetivos_enriquecidos) / OBJ_POR_FILA_PLAN)
 
     for f in range(num_filas):
-        cols = st.columns(OBJ_POR_FILA_PLAN)
+        cols = st.columns(OBJ_POR_FILA_PLAN) if OBJ_POR_FILA_PLAN > 1 else [st.container()]
         for c in range(OBJ_POR_FILA_PLAN):
             idx = f * OBJ_POR_FILA_PLAN + c
             if idx >= len(objetivos_enriquecidos):
