@@ -1178,7 +1178,7 @@ with tab_perfil:
 
             with col_t1:
                 r_10 = st.radio(
-                    "Guardaste $100.000 en algún lugar y al mes siguiente valen $90.000. ¿Qué hacés?",
+                    "Guardaste 100.000 pesos en algún lugar y al mes siguiente valen $90.000. ¿Qué hacés?",
                     ["Los saco ya, no quiero perder más", "Me preocupa pero los dejo un tiempo más", "Los dejo, seguro se recupera", "Pongo más plata, está barato"],
                     key="r_10"
                 )
@@ -1188,7 +1188,7 @@ with tab_perfil:
                     key="r_emocional"
                 )
                 r_30 = st.radio(
-                    "Esos mismos $100.000 ahora valen $70.000. ¿Qué hacés?",
+                    "Esos mismos 100.000 pesos ahora valen $70.000. ¿Qué hacés?",
                     ["Los saco todo ya", "Saco la mitad para no perder más", "Los dejo y espero que vuelvan a subir", "Pongo más plata, es una oportunidad"],
                     key="r_30"
                 )
@@ -1290,7 +1290,7 @@ with tab_perfil:
             st.caption("No hay problema si no sabés — estas preguntas también son para aprender. Respondé lo mejor que puedas.")
 
             r_inflacion_q = st.radio(
-                "Si guardás $10.000 en efectivo hoy y la inflación es alta, en un año esos $10.000...",
+                "Si guardás 10000 pesos en efectivo hoy y la inflación es alta, en un año esos $10.000...",
                 ["Siguen valiendo lo mismo, el efectivo es seguro", "Van a alcanzar para comprar menos cosas que hoy", "No cambia nada, depende del banco", "Van a alcanzar para comprar más cosas"],
                 key="r_inflacion_q"
             )
